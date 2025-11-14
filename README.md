@@ -69,5 +69,7 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 ## 👥 Auteur
 - **Marius AGONDANOU** - Développeur principal
 
+Contacts : E-mail : agondanoumarius3@gmail.com  Téléphone : +229 01 68 53 20 46
+
 ## 🙏 Remerciements
-- À tous les contributeurs qui ont participé au projet
+- À tous les contributeurs qui ont participé au projet d'une façon ou d'une autre.
