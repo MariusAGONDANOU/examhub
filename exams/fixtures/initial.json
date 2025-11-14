@@ -1,0 +1,440 @@
+[
+  {
+    "model": "exams.subject",
+    "pk": 1,
+    "fields": {
+      "name": "Mathématiques",
+      "code": "MATH",
+      "active": true
+    }
+  },
+  {
+    "model": "exams.subject",
+    "pk": 2,
+    "fields": {
+      "name": "PCT",
+      "code": "PCT",
+      "active": true
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 1,
+    "fields": {
+      "name": "BAC C",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-c"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 2,
+    "fields": {
+      "name": "BAC D",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-d"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 3,
+    "fields": {
+      "name": "BAC F4",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-f4"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 4,
+    "fields": {
+      "name": "DTI/STI",
+      "level": "DTI/STI",
+      "is_long_model": false,
+      "active": true,
+      "slug": "dti-sti"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 5,
+    "fields": {
+      "name": "BAC G2",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-g2"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 6,
+    "fields": {
+      "name": "BAC B",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-b"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 7,
+    "fields": {
+      "name": "BAC A2",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-a2"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 8,
+    "fields": {
+      "name": "BAC A1",
+      "level": "BAC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bac-a1"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 9,
+    "fields": {
+      "name": "CAP/CB",
+      "level": "CAP/CB",
+      "is_long_model": false,
+      "active": true,
+      "slug": "cap-cb"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 10,
+    "fields": {
+      "name": "BEPC (modèle court)",
+      "level": "BEPC",
+      "is_long_model": false,
+      "active": true,
+      "slug": "bepc-court"
+    }
+  },
+  {
+    "model": "exams.exam",
+    "pk": 11,
+    "fields": {
+      "name": "BEPC (modèle long)",
+      "level": "BEPC",
+      "is_long_model": true,
+      "active": true,
+      "slug": "bepc-long"
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 1,
+    "fields": {
+      "exam": 1,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_c_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 2,
+    "fields": {
+      "exam": 1,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_c_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 3,
+    "fields": {
+      "exam": 1,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 2500,
+      "file": "packs/bac_c_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 4,
+    "fields": {
+      "exam": 2,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_d_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 5,
+    "fields": {
+      "exam": 2,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_d_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 6,
+    "fields": {
+      "exam": 2,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 2500,
+      "file": "packs/bac_d_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 7,
+    "fields": {
+      "exam": 3,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_f4_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 8,
+    "fields": {
+      "exam": 3,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bac_f4_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 9,
+    "fields": {
+      "exam": 3,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 2500,
+      "file": "packs/bac_f4_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 10,
+    "fields": {
+      "exam": 4,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/dti/sti_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 11,
+    "fields": {
+      "exam": 4,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/dti/sti_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 12,
+    "fields": {
+      "exam": 4,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 2500,
+      "file": "packs/dti/sti_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 13,
+    "fields": {
+      "exam": 5,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bac_g2_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 14,
+    "fields": {
+      "exam": 6,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bac_b_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 15,
+    "fields": {
+      "exam": 7,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bac_a2_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 16,
+    "fields": {
+      "exam": 8,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bac_a1_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 17,
+    "fields": {
+      "exam": 9,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/cap/cb_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 18,
+    "fields": {
+      "exam": 9,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/cap/cb_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 19,
+    "fields": {
+      "exam": 9,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/cap/cb_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 20,
+    "fields": {
+      "exam": 10,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bepc_(modèle_court)_maths.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 21,
+    "fields": {
+      "exam": 10,
+      "pack_type": "SINGLE",
+      "subject": 2,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bepc_(modèle_court)_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 22,
+    "fields": {
+      "exam": 10,
+      "pack_type": "DOUBLE",
+      "subject": null,
+      "years_range": "2015–2025",
+      "price": 1500,
+      "file": "packs/bepc_(modèle_court)_maths_pct.zip",
+      "is_active": true
+    }
+  },
+  {
+    "model": "exams.pack",
+    "pk": 23,
+    "fields": {
+      "exam": 11,
+      "pack_type": "SINGLE",
+      "subject": 1,
+      "years_range": "2015–2025",
+      "price": 1000,
+      "file": "packs/bepc_(modèle_long)_maths.zip",
+      "is_active": true
+    }
+  }
+]

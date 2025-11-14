@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% block title %}Questions sur les corrigés — Examhub{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Poser des questions sur les corrigés</h1>
+
+{% if locked %}
+  <p class="mb-4 text-sm text-gray-600">L'accès au chatbot est réservé aux utilisateurs ayant acheté au moins un pack Épreuves + Corrigés.</p>
+  <div class="bg-white p-6 rounded-2xl shadow">
+    <p class="mb-4">Accès restreint — vous devez acheter un pack pour utiliser le chatbot.</p>
+    <a href="{% url 'exams:index' %}" class="inline-block px-4 py-2 rounded bg-indigo-600 text-white">Voir les packs</a>
+  </div>
+{% else %}
+  <div class="bg-white p-6 rounded-2xl shadow">
+    <div id="chat-container" class="flex flex-col gap-4">
+      <div id="chat-messages" class="h-96 overflow-auto border rounded p-4 bg-gray-50"></div>
+
+      <div id="attachments-area" class="space-y-2">
+        <label class="text-sm font-medium">Fichiers joints (facultatif)</label>
+        <div class="flex gap-2 items-center">
+          <input id="chat-file-input" type="file" class="block" />
+          <div id="attach-list" class="flex gap-2"></div>
+        </div>
+        <div class="text-xs text-gray-500">Vous pouvez joindre un PDF ou une image. Un extrait du PDF sera essayé si possible.</div>
+      </div>
+
+      <div class="flex gap-2">
+        <textarea id="chat-input" placeholder="Posez votre question... (Ctrl+Entrée pour envoyer)" rows="2" class="flex-1 p-3 border rounded"></textarea>
+        <div class="flex flex-col gap-2">
+          <button id="send-btn" class="px-4 py-2 bg-indigo-600 text-white rounded">Envoyer</button>
+          <button id="clear-btn" class="px-4 py-2 bg-gray-200 rounded">Réinitialiser</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<!-- Marked.js pour Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<!-- MathJax pour équations (config minimale) -->
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<script>
+(function(){
+  // ---------- Helpers ----------
+  function scrollToBottom(el){ el.scrollTop = el.scrollHeight; }
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+  const csrftoken = () => getCookie('csrftoken');
+
+  // ---------- Elements ----------
+  const messagesDiv = document.getElementById('chat-messages');
+  const sendBtn = document.getElementById('send-btn');
+  const input = document.getElementById('chat-input');
+  const fileInput = document.getElementById('chat-file-input');
+  const attachList = document.getElementById('attach-list');
+  const clearBtn = document.getElementById('clear-btn');
+
+  let attachments = []; // {id,name,url,text}
+
+  // ---------- Math/Text preprocessor ----------
+  // Transforme des patterns fréquents retournés par le modèle en délimiteurs que MathJax/Marked comprennent.
+  function transformMath(text){
+    if(!text || typeof text !== 'string') return text;
+
+    // 1) Supprimer blocs [ ] vides
+    text = text.replace(/^\s*\[\s*\]\s*$/gm, '');
+
+    // 2) Transformer blocs [ ... ] en équations display $$ ... $$
+    text = text.replace(/^\s*\[\s*([\s\S]*?)\s*\]\s*$/gm, function(_, inner){
+      if(inner.trim().length === 0) return '';
+      if(/\\(?:frac|sqrt|begin|sum|int)|=|\^|_|[0-9][+\-*/][0-9]/.test(inner)){
+        return '\n\n$$\n' + inner.trim() + '\n$$\n\n';
+      }
+      return inner;
+    });
+
+    // 3) Transformer parenthèses contenant une expression math en inline \( ... \)
+    text = text.replace(/\(\s*([^\)]+?)\s*\)/g, function(_, inner){
+      if(/[=<>]|\\(?:frac|sqrt)|\^\{?|\d\s*[+\-*/]\s*\d|[a-zA-Z]/.test(inner)){
+        return '\\(' + inner.trim() + '\\)';
+      }
+      return '(' + inner + ')';
+    });
+
+    // 4) Encapsuler toute fraction isolée non déjà dans $$...$$
+    text = text.replace(/(^|\s)(\\frac\{[^}]+\}\{[^}]+\})(\s|$)/g, function(_, pre, frac, post){
+      return pre + '$$' + frac + '$$' + post;
+    });
+
+    return text;
+  }
+
+
+  // ---------- Rendu d'un message (Markdown + Math) ----------
+  function addMessage(role, text){
+    const wrap = document.createElement('div');
+    wrap.className = role === 'user' ? 'text-right mb-3' : 'text-left mb-3';
+    const bubble = document.createElement('div');
+    bubble.className = 'inline-block p-3 rounded-lg shadow-sm max-w-[80%] prose prose-sm';
+    bubble.style.whiteSpace = 'pre-wrap';
+    if(role === 'user'){
+      bubble.classList.add('bg-indigo-600', 'text-white');
+    } else {
+      bubble.classList.add('bg-white', 'text-gray-900', 'border');
+    }
+
+    // Preprocess pour transformer patterns LaTeX en délimiteurs valides puis parser Markdown
+    const processed = transformMath(String(text || ''));
+
+    // marked.parse fera le rendu Markdown -> HTML (les délimiteurs $$ / \( \) resteront)
+    bubble.innerHTML = marked.parse(processed);
+
+    wrap.appendChild(bubble);
+    messagesDiv.appendChild(wrap);
+    scrollToBottom(messagesDiv);
+
+    // Demander à MathJax de typer le contenu ajouté (rendu LaTeX)
+    if(window.MathJax && MathJax.typesetPromise){
+      MathJax.typesetPromise([bubble]).catch(function(err){
+        // Pas critique, on log en console uniquement
+        console.warn('MathJax typeset failed:', err);
+      });
+    }
+  }
+
+  // ---------- Attachments UI ----------
+  function renderAttachments(){
+    attachList.innerHTML = '';
+    attachments.forEach(a => {
+      const el = document.createElement('div');
+      el.className = 'flex items-center gap-2 bg-gray-100 px-2 py-1 rounded';
+      el.innerHTML = `<a href="${a.url}" target="_blank" class="text-sm underline">${a.name}</a>`;
+      const rm = document.createElement('button');
+      rm.className = 'text-xs text-red-600 ml-2';
+      rm.innerText = 'Supprimer';
+      rm.addEventListener('click', () => {
+        attachments = attachments.filter(x=>x.id !== a.id);
+        renderAttachments();
+      });
+      el.appendChild(rm);
+      attachList.appendChild(el);
+    });
+  }
+
+  // ---------- Upload ----------
+  async function uploadFile(file){
+    const fd = new FormData();
+    fd.append('file', file);
+    addMessage('user', `📂 Téléversement de **${file.name}**…`);
+    try {
+      const res = await fetch("{% url 'exams:chatbot_upload' %}", {
+        method: 'POST',
+        body: fd,
+        headers: {'X-CSRFToken': csrftoken()},
+      });
+      const data = await res.json().catch(()=>({error:'invalid_json'}));
+      // remove temporary user upload message
+      messagesDiv.lastChild && messagesDiv.removeChild(messagesDiv.lastChild);
+      if(!res.ok){
+        addMessage('assistant', '⚠️ Erreur upload : ' + (data.detail || data.error || 'erreur serveur'));
+        return;
+      }
+      addMessage('assistant', `✅ Fichier **${data.name}** téléversé avec succès.`);
+      attachments.push({id: data.id, name: data.name, url: data.url, text: data.text});
+      renderAttachments();
+    } catch(e){
+      addMessage('assistant', '⚠️ Erreur réseau lors du téléversement.');
+    }
+  }
+
+  // ---------- Envoi question ----------
+  async function sendQuestion(){
+    const q = input.value.trim();
+    if(!q && attachments.length === 0) return;
+    if(q) addMessage('user', q);
+    input.value = '';
+
+    const payload = {question: q, attachments: attachments.map(a=>a.id)};
+    addMessage('assistant', '_En cours de génération de la réponse…_');
+    const placeholder = messagesDiv.lastChild;
+    try {
+      const resp = await fetch("{% url 'exams:chatbot_ask' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken()},
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json().catch(()=>({error: 'invalid_json'}));
+      // remove placeholder
+      messagesDiv.removeChild(placeholder);
+      if(!resp.ok){
+        if(data && data.error === 'paywall'){
+          addMessage('assistant', 'Accès restreint — vous devez acheter un pack pour utiliser le chatbot. <a href="{% url "exams:index" %}">Voir les packs</a>');
+        } else {
+          addMessage('assistant', '⚠️ Erreur du serveur : ' + (data.detail || data.error || 'erreur inattendue'));
+        }
+        return;
+      }
+      // Rendre la réponse (Markdown + MathJax) via addMessage
+      addMessage('assistant', data.answer || '(Aucune réponse reçue)');
+      scrollToBottom(messagesDiv);
+    } catch (e) {
+      // remove placeholder if present
+      if(messagesDiv.contains(placeholder)) messagesDiv.removeChild(placeholder);
+      addMessage('assistant', '⚠️ Erreur réseau lors de la demande.');
+    }
+  }
+
+  // ---------- Clear conversation ----------
+  clearBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch("{% url 'exams:chatbot_clear' %}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrftoken()}
+      });
+      if(res.ok){
+        messagesDiv.innerHTML = '';
+        attachments = [];
+        renderAttachments();
+        addMessage('assistant', '_Conversation réinitialisée._');
+      } else {
+        addMessage('assistant', 'Impossible de réinitialiser la conversation.');
+      }
+    } catch(e){
+      addMessage('assistant', 'Erreur réseau lors de la réinitialisation.');
+    }
+  });
+
+  // ---------- Events ----------
+  sendBtn.addEventListener('click', sendQuestion);
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){
+      e.preventDefault();
+      sendQuestion();
+    }
+  });
+
+  fileInput.addEventListener('change', function(e){
+    if(!this.files || !this.files[0]) return;
+    uploadFile(this.files[0]);
+    this.value = '';
+  });
+
+  // Message d'accueil
+  addMessage('assistant', '👋 Bonjour ! Posez votre question ou joignez un fichier pour que je l’analyse.');
+})();
+</script>
+{% endblock %}

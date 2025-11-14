@@ -1,0 +1,104 @@
+{% load static %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Examhub{% endblock %}</title>
+  <script>
+    (function(){
+      try {
+        const _warn = console.warn.bind(console);
+        console.warn = function(){
+          const msg = arguments && arguments[0] ? String(arguments[0]) : '';
+          if (msg && msg.indexOf('cdn.tailwindcss.com should not be used in production') !== -1) {
+            return; // supprimer cet avertissement spécifique
+          }
+          return _warn.apply(console, arguments);
+        };
+      } catch(e){}
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="{% static 'forum/fallback_sticker.svg' %}">
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <header class="bg-white shadow fixed top-0 left-0 right-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-xl font-bold">Examhub</a>
+      <nav class="text-sm text-gray-600 flex items-center gap-3">
+
+        {% with request.resolver_match.app_name as appname %}
+          {% with request.resolver_match.url_name as urlname %}
+
+            {# --- CAS 1 : page d’accueil (/) -> afficher S’inscrire / Se connecter --- #}
+            {% if appname == 'core' and urlname == 'home' %}
+              {% if not request.user.is_authenticated %}
+                <a href="{% url 'account_signup' %}?next={{ request.GET.next|default:''|urlencode }}"
+                   class="px-3 py-1 rounded hover:bg-gray-100">
+                  S’inscrire
+                </a>
+                <a href="{% url 'account_login' %}?next={{ request.GET.next|default:''|urlencode }}"
+                   class="px-3 py-1 rounded hover:bg-gray-100">
+                  Se connecter
+                </a>
+              {% endif %}
+
+            {# --- CAS 2 : autres pages -> afficher Mon panier / Mes notifications --- #}
+            {% else %}
+              {# Lien Mon panier (actif si on est sur la page du panier) #}
+              <a href="{% url 'exams:cart_detail' %}"
+                 class="relative inline-flex items-center px-3 py-1 rounded hover:bg-gray-100
+                        {% if urlname == 'cart_detail' %}bg-indigo-50 text-indigo-700 font-medium{% endif %}">
+                Mon panier
+                <span id="cart-badge"
+                      class="ml-2 inline-flex items-center justify-center text-xs font-bold rounded-full
+                             text-white bg-red-600 w-5 h-5
+                             {% if cart_count|default:0|add:0 == 0 %}hidden{% endif %}">
+                  {{ cart_count|default:0 }}
+                </span>
+              </a>
+
+              {# Lien Mes notifications #}
+              <a href="{% url 'exams:notifications_list' %}"
+                 class="relative inline-flex items-center px-3 py-1 rounded hover:bg-gray-100
+                        {% if urlname in 'notifications_list notifications_mark_read notifications_delete notifications_mark_all_read notifications_delete_all' %}bg-indigo-50 text-indigo-700 font-medium{% endif %}">
+                Mes notifications
+                <span id="notifications-badge"
+                      class="ml-2 inline-flex items-center justify-center text-xs font-bold rounded-full
+                             text-white bg-red-600 w-5 h-5
+                             {% if notifications_count|default:0|add:0 == 0 %}hidden{% endif %}">
+                  {{ notifications_count|default:0 }}
+                </span>
+              </a>
+            {% endif %}
+
+          {% endwith %}
+        {% endwith %}
+
+      </nav>
+    </div>
+  </header>
+
+  {# Afficher la sidebar UNIQUEMENT pour les CLIENTS connectés (jamais sur la page d'accueil) #}
+  {% if request.user.is_authenticated and request.user.profile.role == 'client' and request.path != '/' %}
+    {% include 'partials/sidebar.html' %}
+  {% endif %}
+
+  <main class="max-w-5xl mx-auto px-4 pt-20 pb-10">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="mb-4 p-3 rounded bg-green-100">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t py-6 text-center text-sm text-gray-500">
+    © {% now "Y" %} Examhub
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+                                                                                                                                                                                                                                                            

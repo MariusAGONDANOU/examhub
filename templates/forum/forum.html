@@ -1,0 +1,2581 @@
+  {% extends 'base.html' %}
+{% load static %}
+{% block title %}Forum d'échange et de discussion — Examhub{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Forum d'échange et de discussion</h1>
+
+<div class="bg-white p-4 rounded-2xl shadow h-[70vh] flex flex-col">
+  <!-- zone messages -->
+  <div id="messages-area" class="overflow-auto flex-1 p-3 space-y-3" style="min-height:200px;">
+    <!-- Les messages sont injectés par JS -->
+    <div id="loading-msg" class="text-sm text-gray-500">Chargement des messages...</div>
+  </div>
+
+  <!-- zone "répondre à" -->
+  <div id="reply-box" class="hidden items-start gap-3 mt-3 p-2 bg-gray-50 rounded">
+    <div class="flex-1">
+      <div id="reply-snippet" class="text-sm text-gray-700 font-medium"></div>
+      <div id="reply-attachment-picker" class="mt-2 hidden">
+        <div class="text-[12px] text-gray-600 mb-1">Joindre la réponse à une pièce jointe (optionnel) :</div>
+        <div id="reply-attachment-options" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+    <button id="reply-cancel" class="ml-auto px-3 py-1 rounded bg-gray-100 text-sm">Annuler</button>
+  </div>
+
+  <!-- zone envoi -->
+  <form id="message-form" class="mt-4 flex items-start gap-3" enctype="multipart/form-data" action="{% url 'forum:messages_list' %}">
+    {% csrf_token %}
+    <div id="rich-preview" class="mt-2 flex items-center gap-2"></div>
+    <label for="attachments" class="cursor-pointer select-none p-2 rounded-md hover:bg-gray-100" title="Ajouter une pièce jointe">
+      📎
+    </label>
+    <input id="attachments" name="attachments" type="file" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.7z,application/zip,image/*,video/*" />
+
+    {% if rich_picker_enabled %}
+    <!-- Le bouton “picker” est désormais placé ici, entre la trombone et la zone de texte -->
+    <button id="fh-richpicker-toggle" type="button" class="p-2 rounded-md hover:bg-gray-100"
+            title="Stickers / Emojis / GIFs" aria-haspopup="dialog" aria-expanded="false">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+          class="w-6 h-6" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2Zm-3.5 7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 18c-2.485 0-4.5-1.57-4.5-3h9c0 1.43-2.015 3-4.5 3Z"/>
+      </svg>
+    </button>
+    {% endif %}
+
+    <div class="flex-1">
+      <textarea id="message-input" name="content" rows="2"
+                class="w-full p-3 rounded-xl border border-gray-200 focus:outline-none"
+                placeholder="Entrez votre message..."></textarea>
+      <div id="file-preview" class="mt-2 space-y-1 text-sm text-gray-600"></div>
+    </div>
+
+    <button id="send-btn" type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 text-white">Envoyer</button>
+  </form>
+</div>
+
+<!-- Modal image (lightbox) -->
+<div id="fh-lightbox" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" 
+     style="background: rgba(0,0,0,0.6);">
+  <div class="max-w-[95%] max-h-[95%] relative">
+    <button id="fh-lightbox-close" aria-label="Fermer" 
+            style="position:absolute; right:-10px; top:-10px; background:#fff; border-radius:9999px; padding:4px 8px; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+      ✕
+    </button>
+    <img id="fh-lightbox-img" src="" alt="Aperçu image" style="max-width:100%; max-height:100%; display:block; border-radius:8px;" />
+    <div id="fh-lightbox-footer" style="margin-top:8px; display:flex; gap:8px; justify-content:flex-end; align-items:center;">
+      <a id="fh-lightbox-download" href="#" download class="px-3 py-1 rounded bg-white text-sm">Télécharger</a>
+      <a id="fh-lightbox-open" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1 rounded bg-white text-sm">Ouvrir dans un nouvel onglet</a>
+    </div>
+  </div>
+</div>
+
+<!-- Modale contenu d'archive ZIP -->
+<div id="fh-zip-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background: rgba(0,0,0,0.6);" role="dialog" aria-modal="true" aria-labelledby="fh-zip-title">
+  <div class="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden relative flex flex-col">
+    <button id="fh-zip-close" aria-label="Fermer" class="absolute right-2 top-2 px-2 py-1 rounded bg-gray-100">✕</button>
+    <div class="px-3 py-2 border-b">
+      <h2 id="fh-zip-title" class="text-base font-semibold">Contenu de l’archive</h2>
+      <div id="fh-zip-sub" class="text-xs text-gray-500 mt-0.5"></div>
+    </div>
+    <div id="fh-zip-body" class="p-3 overflow-auto">
+      <div class="text-sm text-gray-500">Chargement…</div>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Modale de suppression -->
+<div id="fh-delete-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background: rgba(0,0,0,0.6);" role="dialog" aria-modal="true" aria-labelledby="fh-delete-title">
+  <div class="bg-white rounded-xl w-full max-w-md overflow-hidden relative flex flex-col">
+    <button id="fh-delete-close" aria-label="Fermer" class="absolute right-2 top-2 px-2 py-1 rounded bg-gray-100">✕</button>
+    <div class="px-4 py-3 border-b">
+      <h2 id="fh-delete-title" class="text-base font-semibold">Supprimer le message</h2>
+      <div class="text-sm text-gray-600 mt-1">Choisissez la portée de la suppression.</div>
+    </div>
+    <div class="px-4 py-3 space-y-2">
+      <button id="fh-del-self" type="button" class="w-full px-3 py-2 rounded bg-white border text-red-600">Supprimer pour moi</button>
+      <button id="fh-del-all" type="button" class="w-full px-3 py-2 rounded bg-red-600 text-white">Supprimer pour tout le monde</button>
+      <button id="fh-del-cancel" type="button" class="w-full px-3 py-2 rounded bg-gray-100">Annuler</button>
+      <div id="fh-del-hint" class="text-[12px] text-gray-500"></div>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Modal générique fichiers/vidéos/docs -->
+<div id="file-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background: rgba(0,0,0,0.6);">
+  <div class="bg-white rounded-xl p-3 w-full max-w-4xl max-h-[90vh] overflow-auto relative">
+    <button id="file-modal-close" aria-label="Fermer" class="absolute right-2 top-2 px-2 py-1 rounded bg-gray-100">✕</button>
+    <div id="file-modal-body"></div>
+  </div>
+</div>
+
+<!-- Modale d'édition de message texte -->
+<div id="fh-edit-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background: rgba(0,0,0,0.6);" role="dialog" aria-modal="true" aria-labelledby="fh-edit-title">
+  <div class="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden relative flex flex-col">
+    <button id="fh-edit-close" aria-label="Fermer"
+            class="absolute right-2 top-2 px-2 py-1 rounded bg-gray-100">✕</button>
+    <div class="px-3 py-2 border-b">
+      <h2 id="fh-edit-title" class="text-base font-semibold">Modifier le message</h2>
+    </div>
+    <div class="p-3">
+      <textarea id="fh-edit-textarea" class="w-full p-3 rounded border border-gray-200"
+                rows="8" placeholder="Éditez votre message..."></textarea>
+    </div>
+    <div class="px-3 py-2 border-t bg-gray-50 flex gap-2 justify-end">
+      <button id="fh-edit-cancel" type="button" class="px-3 py-1 rounded bg-gray-100">Abandonner les modifications</button>
+      <button id="fh-edit-apply" type="button" class="px-3 py-1 rounded bg-emerald-600 text-white">Appliquer les modifications</button>
+    </div>
+  </div>
+</div>
+
+<div id="fh-richpicker-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4" style="background: rgba(0,0,0,0.6);" role="dialog" aria-modal="true" aria-labelledby="fh-richpicker-title">
+  <div class="bg-white rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden relative flex flex-col">
+    <div class="flex items-center gap-2 px-3 py-3 border-b">
+      <h2 id="fh-richpicker-title" class="text-base font-semibold">Émojis / GIFs / Stickers</h2>
+      <div class="ml-4 flex items-center gap-2">
+        <button data-tab="emoji" class="fh-tab-btn px-3 py-1.5 rounded bg-gray-900 text-white text-sm">Emoji</button>
+        <button data-tab="gif" class="fh-tab-btn px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-sm">GIFs</button>
+        <button data-tab="sticker" class="fh-tab-btn px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-sm">Stickers</button>
+        <button data-tab="fav" class="fh-tab-btn px-3 py-1.5 rounded bg-gray-100 text-gray-800 text-sm">Favoris</button>
+      </div>
+      <button id="fh-richpicker-close" class="ml-auto px-2 py-1 rounded hover:bg-gray-100" aria-label="Fermer">✕</button>
+    </div>
+
+    <div class="px-3 py-2 border-b">
+      <input id="fh-richpicker-search" type="search" class="w-full px-3 py-2 rounded border" placeholder="Rechercher un emoji, GIF ou sticker…">
+    </div>
+
+    <!-- Corps scrollable -->
+    <div class="p-3 space-y-3 overflow-auto flex-1">
+      <!-- Emoji -->
+      <div id="fh-tab-emoji">
+        <emoji-picker id="fh-emoji-picker" emoji-version="15.1" skin-tone-emoji="👍" class="w-full"></emoji-picker>
+      </div>
+
+      <!-- GIFs -->
+      <div id="fh-tab-gif" class="hidden">
+        <div id="fh-gif-grid" class="grid grid-cols-3 gap-2"></div>
+        <button id="fh-gif-more" class="mt-2 w-full px-3 py-1.5 rounded border bg-white">Charger plus</button>
+      </div>
+
+      <!-- Stickers -->
+      <div id="fh-tab-sticker" class="hidden">
+        <div id="fh-sticker-grid" class="grid grid-cols-4 gap-2"></div>
+        <button id="fh-sticker-more" class="mt-2 w-full px-3 py-1.5 rounded border bg-white">Charger plus</button>
+      </div>
+
+      <!-- Favoris -->
+      <div id="fh-tab-fav" class="hidden">
+        <div id="fh-fav-grid" class="grid grid-cols-4 gap-2"></div>
+        <div class="text-xs text-gray-500">Astuce: cliquez sur l’étoile d’un GIF/sticker pour l’ajouter aux favoris.</div>
+      </div>
+    </div>
+
+    <!-- Footer d’aperçu de la sélection (visible sans fermer la modale) -->
+    <div class="px-3 py-2 border-t bg-gray-50">
+      <div class="text-xs text-gray-600 mb-1">Aperçu de la sélection</div>
+      <div id="fh-modal-preview" class="flex items-center gap-2 min-h-[40px]"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast (notifications) -->
+<div id="toast-area" class="fixed bottom-6 right-6 z-50 space-y-2"></div>
+
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+<!-- Sécurisation HTML (global window.DOMPurify) -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script>
+  // Shims globaux pour éviter ReferenceError si appel avant l’init du picker
+  window.fhRenderComposePreview = window.fhRenderComposePreview || function(){};
+  window.fhRenderModalPreview = window.fhRenderModalPreview || function(){};
+
+  // Rétrocompatibilité: si du code appelle encore les noms locaux, on redirige
+  window.renderComposePreview = window.renderComposePreview || function(){
+    if (window.fhRenderComposePreview) window.fhRenderComposePreview();
+  };
+  window.renderModalPreview = window.renderModalPreview || function(){
+    if (window.fhRenderModalPreview) window.fhRenderModalPreview();
+  };
+
+  // URL globale de secours (au cas où une IIFE ne voit pas sa propre const)
+  window.FH_LIST_URL = "{% url 'forum:messages_list' %}";
+
+  // Fallback global pour getCookie si non défini dans ce scope
+  if (typeof window.getCookie !== 'function') {
+    window.getCookie = function(name){
+      const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return m ? m.pop() : '';
+    };
+  }
+
+  // Formatage mm:ss
+  window.FH_fmtTime = function(sec){
+    if (!isFinite(sec)) return '0:00';
+    const m = Math.floor(sec/60), s = Math.floor(sec%60);
+    return m + ':' + String(s).padStart(2, '0');
+  };
+
+  // Heuristique Safari
+  window.FH_isSafari = function(){
+    const ua = navigator.userAgent || '';
+    const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+    return isSafari;
+  };
+
+  // Formatage de la date/heure d'un message
+  window.FH_formatDateTime = function(m){
+    try {
+      let d = null;
+      if (typeof m === 'object' && m) {
+        if (typeof m.created_at_ts === 'number') d = new Date(m.created_at_ts);
+        else if (m.created_at_iso) d = new Date(m.created_at_iso);
+      } else if (typeof m === 'number') {
+        d = new Date(m);
+      } else if (typeof m === 'string') {
+        d = new Date(m);
+      }
+      if (!d || isNaN(+d)) return '';
+      const date = d.toLocaleDateString('fr-FR');
+      const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return date + ' ' + time;
+    } catch(e){ return ''; }
+  };
+</script>
+<script>
+(function(){
+  // Initialisation de secours au tout début de l'IIFE
+  if (typeof window.replyToId === 'undefined') window.replyToId = null;
+  if (typeof window.replyToAttachmentId === 'undefined') window.replyToAttachmentId = null;
+
+  const LIST_URL = "{% url 'forum:messages_list' %}";
+  const DELETE_URL_TEMPLATE = "{% url 'forum:message_delete' 0 %}";
+  const EDIT_URL_TEMPLATE = "{% url 'forum:message_edit' 0 %}";
+  const ATTACHMENT_DELETE_URL_TEMPLATE = "{% url 'forum:attachment_delete' 0 %}";
+  const ZIP_URL_TEMPLATE = "{% url 'forum:message_attachments_zip' 0 %}";
+  const ZIP_MANIFEST_URL_TEMPLATE = "{% url 'forum:attachment_zip_manifest' 0 %}";
+  const ZIP_FILE_URL_TEMPLATE = "{% url 'forum:attachment_zip_file' 0 %}";
+  // ID de l'utilisateur actuel ou null si non connecté
+  let currentUserId = null;
+
+  // Récupérer la zone de messages une seule fois
+  const messagesArea = document.getElementById('messages-area');
+  const messageForm = document.getElementById('message-form');
+  
+  // S'assurer que messagesArea est disponible globalement
+  window.messagesArea = messagesArea;
+  const messageInput = document.getElementById('message-input');
+  const attachmentsInput = document.getElementById('attachments');
+  const filePreview = document.getElementById('file-preview');
+  const replyBox = document.getElementById('reply-box');
+  const replySnippet = document.getElementById('reply-snippet');
+  const replyCancel = document.getElementById('reply-cancel');
+  const toastArea = document.getElementById('toast-area');
+
+  let newMsgBadge = null;
+  function ensureNewMsgBadge(){
+    // Désactivé: notification flottante supprimée
+    return null;
+  }
+
+  // Démarrer une réponse ciblée vers une pièce jointe précise
+  function startReplyToAttachment(m, att){
+    try {
+      replyToId = m.id;
+      replyToAttachmentId = att && att.id ? att.id : null;
+      replyBox.classList.remove('hidden');
+      // Rendu mini de la PJ ciblée
+      if (att){
+        replySnippet.innerHTML = '';
+        replySnippet.appendChild(renderAttachmentMini(att));
+      }
+      messageInput && messageInput.focus();
+    } catch(e){}
+  }
+
+  let polling = null;
+  let replyToId = null;
+  let replyToAttachmentId = null;
+  window.messagesById = window.messagesById || {};
+  let fhDeletingMessage = null; // état courant pour la modale de suppression
+
+  const DELETE_WINDOW_MS = 5 * 60 * 1000;
+
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+  function showToast(text, kind='info', seconds=3){
+    const el = document.createElement('div');
+    el.className = 'px-4 py-2 rounded shadow-sm text-sm border';
+    if (kind === 'info') el.classList.add('bg-white', 'border-gray-200', 'text-gray-800');
+    if (kind === 'success') el.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+    if (kind === 'error') el.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
+    el.textContent = text;
+    toastArea.appendChild(el);
+    setTimeout(()=> {
+      el.classList.add('opacity-0');
+      setTimeout(()=> el.remove(), 300);
+    }, seconds * 1000);
+  }
+
+  // Lightbox image
+  function fhOpenLightbox(url, filename){
+    const lb = document.getElementById('fh-lightbox');
+    const img = document.getElementById('fh-lightbox-img');
+    const dl = document.getElementById('fh-lightbox-download');
+    const op = document.getElementById('fh-lightbox-open');
+    if(!lb || !img) return;
+    img.src = url;
+    dl.href = url;
+    if (filename) dl.setAttribute('download', filename); else dl.removeAttribute('download');
+    op.href = url;
+    lb.classList.remove('hidden');
+    document.getElementById('fh-lightbox-close').onclick = fhCloseLightbox;
+    lb.onclick = function(e){ if(e.target === lb) fhCloseLightbox(); };
+    document.body.style.overflow = 'hidden';
+  }
+  function fhCloseLightbox(){
+    const lb = document.getElementById('fh-lightbox');
+    if(!lb) return;
+    lb.classList.add('hidden');
+    const img = document.getElementById('fh-lightbox-img');
+    if(img) img.src = '';
+    document.body.style.overflow = '';
+  }
+
+  // Modal générique fichiers/vidéos/docs
+  
+  function openFileModal(att){
+    const modal = document.getElementById('file-modal');
+    const body = document.getElementById('file-modal-body');
+    body.innerHTML = '';
+
+    try {
+      const n = String(att && att.name || '').toLowerCase();
+      if (/\.zip$/.test(n)) { openArchiveModal(att); return; }
+      if (/\.(rar|7z)$/.test(n)) { showToast('Aperçu des archives RAR/7Z non supporté. Téléchargez le fichier.', 'info', 4); return; }
+    } catch(_){ }
+
+    // 1) Vidéos — lecteur + régulation de volume (boutons, slider, molette, clavier)
+    if (att.mime && att.mime.startsWith('video/')) {
+      const wrap = document.createElement('div');
+      wrap.className = 'w-full';
+
+      const v = document.createElement('video');
+      v.controls = true;
+      v.muted = false;
+      v.volume = 1.0;
+      v.playsInline = true;
+      v.src = att.url;
+      v.className = 'w-full rounded';
+      v.setAttribute('tabindex', '0'); // focus pour ↑/↓
+      wrap.appendChild(v);
+
+      const volBar = document.createElement('div');
+      volBar.className = 'mt-2 flex items-center gap-2 text-sm';
+
+      const volDown = document.createElement('button');
+      volDown.type = 'button';
+      volDown.className = 'px-2 py-1 rounded border';
+      volDown.textContent = '–';
+      volDown.title = 'Baisser le volume';
+      volDown.addEventListener('click', ()=> { v.volume = Math.max(0, +(v.volume.toFixed(2)) - 0.1); });
+
+      const volRange = document.createElement('input');
+      volRange.type = 'range';
+      volRange.min = '0'; volRange.max = '1'; volRange.step = '0.05';
+      volRange.value = String(v.volume);
+      volRange.className = 'w-48';
+      volRange.addEventListener('input', ()=> { v.volume = parseFloat(volRange.value || '0'); });
+
+      const volUp = document.createElement('button');
+      volUp.type = 'button';
+      volUp.className = 'px-2 py-1 rounded border';
+      volUp.textContent = '+';
+      volUp.title = 'Augmenter le volume';
+      volUp.addEventListener('click', ()=> { v.volume = Math.min(1, +(v.volume.toFixed(2)) + 0.1); });
+
+      const volPct = document.createElement('span');
+      volPct.className = 'text-gray-600';
+      const syncPct = ()=> { volRange.value = String(v.volume); volPct.textContent = Math.round(v.volume*100) + '%'; };
+      v.addEventListener('volumechange', syncPct);
+      syncPct();
+
+      // Molette: régler le volume
+      v.addEventListener('wheel', (e)=> {
+        if (e.deltaY < 0) v.volume = Math.max(0, +(v.volume.toFixed(2)) - 0.05);
+        else v.volume = Math.min(1, +(v.volume.toFixed(2)) + 0.05);
+        e.preventDefault();
+      }, { passive: false });
+
+      // Clavier: ↑ / ↓
+      v.addEventListener('keydown', (e)=> {
+        if (e.key === 'ArrowUp') { v.volume = Math.min(1, +(v.volume.toFixed(2)) + 0.05); e.preventDefault(); }
+        if (e.key === 'ArrowDown') { v.volume = Math.max(0, +(v.volume.toFixed(2)) - 0.05); e.preventDefault(); }
+      });
+
+      volBar.appendChild(volDown);
+      volBar.appendChild(volRange);
+      volBar.appendChild(volUp);
+      volBar.appendChild(volPct);
+      wrap.appendChild(volBar);
+
+      // Ajout du bouton de téléchargement pour les vidéos
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = att.url;
+      downloadBtn.download = att.name || 'video';
+      downloadBtn.className = 'mt-3 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors';
+      downloadBtn.innerHTML = 'Télécharger la vidéo';
+      wrap.appendChild(downloadBtn);
+
+      body.appendChild(wrap);
+  
+    // 2) PDF — intégration <object> + fallback fiable
+    } else if (att.mime === 'application/pdf' || (att.name && att.name.toLowerCase().endsWith('.pdf'))) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'w-full';
+      const obj = document.createElement('object');
+      obj.data = att.url;
+      obj.type = 'application/pdf';
+      obj.className = 'w-full h-[75vh] rounded border';
+
+      const fallback = document.createElement('div');
+      fallback.className = 'mt-3 text-sm text-gray-700';
+      fallback.innerHTML = `
+        <div class="mb-2">Impossible d'intégrer le PDF dans ce navigateur.</div>
+        <div class="flex gap-2">
+          <a href="${att.url}" download="${att.name || ''}" class="px-3 py-1 rounded border">Télécharger</a>
+        </div>
+      `;
+      let loaded = false;
+      obj.addEventListener('load', () => { loaded = true; });
+      setTimeout(()=> { if (!loaded) wrapper.appendChild(fallback); }, 700);
+
+      wrapper.appendChild(obj);
+      
+      // Bouton de téléchargement pour les PDF
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = att.url;
+      downloadBtn.download = att.name || 'document.pdf';
+      downloadBtn.className = 'mt-3 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors';
+      downloadBtn.innerHTML = 'Télécharger le document';
+      wrapper.appendChild(downloadBtn);
+      
+      body.appendChild(wrapper);
+
+    // 3) Office — pas d’aperçu intégré cross-navigateur
+    } else if (/\.((docx?|rtf|odt)|(xlsx?|csv)|(pptx?))$/i.test(att.name || '')) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'w-full';
+      const iframe = document.createElement('iframe');
+      try {
+        const absUrl = (att.url || '').startsWith('http') ? att.url : (location.origin + att.url);
+        iframe.src = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(absUrl);
+      } catch(_) {
+        iframe.src = att.url;
+      }
+      iframe.className = 'w-full h-[75vh] rounded border';
+      iframe.setAttribute('allowfullscreen', 'true');
+      wrapper.appendChild(iframe);
+
+      const fallback = document.createElement('div');
+      fallback.className = 'mt-3 text-sm text-gray-700';
+      const aDl = document.createElement('a');
+      aDl.href = att.url; aDl.download = att.name || '';
+      aDl.className = 'px-3 py-1 rounded border'; aDl.textContent = 'Télécharger';
+      fallback.appendChild(aDl);
+      wrapper.appendChild(fallback);
+      
+      // Bouton de téléchargement pour les documents Office
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = att.url;
+      downloadBtn.download = att.name || 'document';
+      downloadBtn.className = 'mt-3 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors';
+      downloadBtn.innerHTML = 'Télécharger le document';
+      wrapper.appendChild(downloadBtn);
+
+      body.appendChild(wrapper);
+
+    // 4) Images
+    } else if (att.mime && att.mime.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = att.url;
+      img.className = 'max-w-full rounded';
+      img.alt = att.name || 'Image';
+      body.appendChild(img);
+      
+      // Bouton de téléchargement pour les images
+      const downloadBtn = document.createElement('a');
+      downloadBtn.href = att.url;
+      downloadBtn.download = att.name || 'image';
+      downloadBtn.className = 'mt-3 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors';
+      downloadBtn.innerHTML = 'Télécharger l\'image';
+      body.appendChild(downloadBtn);
+
+    // 5) Fallback générique
+    } else {
+      const info = document.createElement('div');
+      info.className = 'text-sm text-gray-700';
+      info.innerHTML = '<div class="mb-2">Aperçu indisponible.</div>';
+      const aOpen = document.createElement('a');
+      aOpen.href = att.url; aOpen.target = '_blank'; aOpen.rel = 'noopener';
+      aOpen.className = 'px-3 py-1 rounded border mr-2'; aOpen.textContent = 'Ouvrir dans un nouvel onglet';
+      const aDl = document.createElement('a');
+      aDl.href = att.url; aDl.download = att.name || '';
+      aDl.className = 'px-3 py-1 rounded border'; aDl.textContent = 'Télécharger';
+      info.appendChild(aOpen); info.appendChild(aDl);
+      body.appendChild(info);
+    }
+
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    document.getElementById('file-modal-close').onclick = closeFileModal;
+    modal.onclick = function(e){ if(e.target === modal) closeFileModal(); };
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeFileModal(){
+    const modal = document.getElementById('file-modal');
+    if(!modal) return;
+    modal.classList.add('hidden'); modal.classList.remove('flex');
+    const body = document.getElementById('file-modal-body');
+    if(body) body.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  function fhScrollToMessage(id){
+    try {
+      const el = document.getElementById('msg-' + id);
+      if(el){
+        el.scrollIntoView({behavior:'smooth', block:'center'});
+        el.animate && el.animate(
+          [{ boxShadow: '0 0 0px rgba(0,0,0,0)' }, { boxShadow: '0 0 12px rgba(34,197,94,0.6)' }, { boxShadow: '0 0 0px rgba(0,0,0,0)' }],
+          { duration: 1200 }
+        );
+      } else {
+        location.hash = 'msg-' + id;
+      }
+    } catch(e){}
+  }
+
+  function createAvatar(m){
+    const wrap = document.createElement('div');
+    wrap.className = 'w-9 h-9 rounded-full flex items-center justify-center font-semibold';
+    if (m.author_avatar_url){
+      const img = document.createElement('img');
+      img.src = m.author_avatar_url;
+      img.className = 'w-9 h-9 rounded-full object-cover';
+      wrap.appendChild(img);
+      return wrap;
+    }
+    const initials = (m.author_initials && m.author_initials.trim()) ? m.author_initials : (m.author_name || '').slice(0,2).toUpperCase();
+    const bg = m.is_mine ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700';
+    wrap.className = wrap.className + ' ' + bg;
+    wrap.textContent = initials;
+    return wrap;
+  }
+
+  // Avatar du supprimeur (utilisé pour les messages supprimés)
+  function createDeleterAvatar(m){
+    const wrap = document.createElement('div');
+    wrap.className = 'w-9 h-9 rounded-full flex items-center justify-center font-semibold bg-gray-100 text-gray-700';
+    const url = m.deleter_avatar_url;
+    if (url){
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'w-9 h-9 rounded-full object-cover';
+      wrap.appendChild(img);
+      return wrap;
+    }
+    const initials = (m.deleter_initials && m.deleter_initials.trim()) ? m.deleter_initials : (m.deleter_name || '').slice(0,2).toUpperCase();
+    wrap.textContent = initials || '??';
+    return wrap;
+  }
+
+  function humanSize(bytes){
+    if (typeof bytes !== 'number') return '';
+    const units = ['B','KB','MB','GB'];
+    let u = 0, b = bytes;
+    while (b >= 1024 && u < units.length-1){ b /= 1024; u++; }
+    return `${Math.round(b)} ${units[u]}`;
+  }
+
+  function iconForAtt(att){
+    const mime = (att.mime || '').toLowerCase();
+    const name = (att.name || '').toLowerCase();
+    if (mime.startsWith('image/')) return '🖼️';
+    if (mime.startsWith('video/')) return '🎬';
+    if (name.endsWith('.pdf')) return '📄 PDF';
+    if (/\.(docx?|rtf)$/.test(name)) return '📝 DOC';
+    if (/\.(xlsx?|csv)$/.test(name)) return '📊 XLS';
+    if (/\.(pptx?)$/.test(name)) return '📈 PPT';
+    if (/\.(zip|rar|7z)$/.test(name)) return '🗜️ Archive';
+    return '📁 Fichier';
+  }
+
+
+  // Rendu d’une vignette "vidéo" avec overlay play
+  function renderVideoThumb(att){
+    const wrap = document.createElement('div');
+    wrap.className = 'relative inline-block cursor-pointer';
+    let thumbEl;
+    if (att.thumb_url){
+      const img = document.createElement('img');
+      img.src = att.thumb_url;
+      img.alt = att.name || 'Vidéo';
+      img.className = 'w-64 h-36 object-cover rounded';
+      img.onerror = function(){
+        const div = document.createElement('div');
+        div.className = 'w-64 h-36 bg-black/60 rounded';
+        if (img.parentNode) img.parentNode.replaceChild(div, img);
+      };
+      thumbEl = img;
+    } else {
+      const div = document.createElement('div');
+      div.className = 'w-64 h-36 bg-black/60 rounded';
+      thumbEl = div;
+    }
+    wrap.appendChild(thumbEl);
+    const play = document.createElement('div');
+    play.className = 'absolute inset-0 flex items-center justify-center';
+    const badge = document.createElement('div');
+    badge.className = 'w-12 h-12 rounded-full bg-white/80 text-emerald-700 flex items-center justify-center text-xl font-semibold shadow';
+    badge.textContent = '▶';
+    play.appendChild(badge);
+    wrap.appendChild(play);
+    wrap.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+    return wrap;
+  }
+
+  // Cartouche Archive (ZIP/RAR/7Z) façon capture: icône + nom + taille + méta
+  function renderArchiveCard(att, isMine){
+    const card = document.createElement('div');
+    card.className = 'inline-flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-200 bg-white shadow-sm cursor-pointer';
+
+    const icon = document.createElement('div');
+    icon.className = 'w-8 h-8 rounded bg-amber-100 text-amber-700 flex items-center justify-center text-lg';
+    icon.textContent = '🗜️';
+
+    const info = document.createElement('div');
+    info.className = 'min-w-0';
+
+    const name = document.createElement('div');
+    // Accentuation du nom côté émetteur
+    name.className = 'truncate max-w-xs ' + (isMine ? 'text-emerald-700 font-semibold text-sm' : 'text-gray-900 font-medium text-sm');
+    name.textContent = att.name || 'Archive';
+
+    const meta = document.createElement('div');
+    meta.className = 'text-[11px] text-gray-500';
+    const sizeTxt = (typeof att.size_bytes === 'number') ? humanSize(att.size_bytes) : '';
+    // Simplicité lisible: on affiche "ZIP" par défaut (icône/nom détaillent le type)
+    meta.textContent = `ZIP · ${sizeTxt}`;
+
+    info.appendChild(name); info.appendChild(meta);
+    card.appendChild(icon); card.appendChild(info);
+
+    // Clic sur la carte = ouvrir la modale ZIP ou informer pour RAR/7Z
+    card.addEventListener('click', (e)=>{
+      e.preventDefault();
+      try {
+        const n = String(att && att.name || '').toLowerCase();
+        if (/\.zip$/.test(n)) return openArchiveModal(att);
+        if (/\.(rar|7z)$/.test(n)) return showToast('Aperçu des archives RAR/7Z non supporté. Téléchargez le fichier.', 'info', 4);
+      } catch(_){ }
+    });
+
+    return card;
+  }
+
+  // Carte Document (DOC/XLS/PPT/TXT/CSV/RTF/ODT)
+  function renderDocCard(att, isMine){
+    const card = document.createElement('div');
+    card.className = 'inline-flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-200 bg-white shadow-sm cursor-pointer max-w-xs';
+
+    const icon = document.createElement('div');
+    icon.className = 'w-8 h-8 rounded bg-gray-100 text-gray-700 flex items-center justify-center text-lg';
+    icon.textContent = '📝';
+
+    const info = document.createElement('div');
+    info.className = 'min-w-0';
+
+    const name = document.createElement('div');
+    name.className = 'truncate max-w-[12rem] ' + (isMine ? 'text-emerald-700 font-semibold text-sm' : 'text-gray-900 font-medium text-sm');
+    name.textContent = att.name || 'Document';
+
+    const meta = document.createElement('div');
+    meta.className = 'text-[11px] text-gray-500';
+    const sizeTxt = (typeof att.size_bytes === 'number') ? humanSize(att.size_bytes) : '';
+    meta.textContent = sizeTxt;
+
+    info.appendChild(name); info.appendChild(meta);
+    card.appendChild(icon); card.appendChild(info);
+
+    card.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+    return card;
+  }
+
+  // Mini aperçu compact d'une pièce jointe (utilisé dans les contextes de réponse)
+  function renderAttachmentMini(att){
+    const wrap = document.createElement('div');
+    wrap.className = 'inline-flex items-center gap-2 px-2 py-1 rounded border bg-white text-xs max-w-[220px]';
+    wrap.style.cursor = 'pointer';
+    try {
+      const n = String(att && att.name || '').toLowerCase();
+      wrap.addEventListener('click', (e)=>{
+        e.preventDefault();
+        if (/\.zip$/.test(n)) return openArchiveModal(att);
+        if (/\.(rar|7z)$/.test(n)) return showToast('Aperçu des archives RAR/7Z non supporté. Téléchargez le fichier.', 'info', 4);
+        return openFileModal(att);
+      });
+    } catch(_){ }
+    const name = att && (att.name || 'Fichier');
+    const short = (name || '').length > 30 ? (name.slice(0, 27) + '…') : (name || '');
+    const mime = (att && (att.mime || '')).toLowerCase();
+
+    if (mime.startsWith('image/')){
+      const img = document.createElement('img');
+      img.src = att.url; img.alt = name || 'Image';
+      img.className = 'w-7 h-7 rounded object-cover';
+      wrap.appendChild(img);
+      const t = document.createElement('span'); t.textContent = short; t.className='truncate'; wrap.appendChild(t);
+      return wrap;
+    }
+    if (mime.startsWith('video/')){
+      const badge = document.createElement('span'); badge.textContent = '▶ Vidéo'; badge.className='px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200';
+      wrap.appendChild(badge);
+      const t = document.createElement('span'); t.textContent = short; t.className='truncate'; wrap.appendChild(t);
+      return wrap;
+    }
+    if ((name || '').toLowerCase().endsWith('.pdf')){
+      if (att.thumb_url){
+        const img = document.createElement('img');
+        img.src = att.thumb_url; img.alt = name || 'PDF';
+        img.className = 'w-8 h-8 rounded border object-cover';
+        wrap.appendChild(img);
+      } else {
+        const badge = document.createElement('span'); badge.textContent = 'PDF'; badge.className='px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border'; wrap.appendChild(badge);
+      }
+      const t = document.createElement('span'); t.textContent = short; t.className='truncate'; wrap.appendChild(t);
+      return wrap;
+    }
+    if (/\.(zip|rar|7z)$/i.test(name || '')){
+      const ico = document.createElement('span'); ico.textContent='🗜️'; wrap.appendChild(ico);
+      const t = document.createElement('span'); t.textContent = short; t.className='truncate'; wrap.appendChild(t);
+      return wrap;
+    }
+    // Fichiers bureautiques (docx, xlsx, pptx, txt, csv, etc.)
+    if (/\.((docx?|rtf|odt)|(xlsx?|csv)|(pptx?)|txt)$/i.test(name || '')){
+      wrap.className = 'inline-flex items-center gap-2 px-2 py-1 rounded border bg-white text-sm';
+      const badge = document.createElement('span'); badge.textContent = '📝 DOC'; badge.className='px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border'; wrap.appendChild(badge);
+      const t = document.createElement('span'); t.textContent = name || 'Document'; wrap.appendChild(t);
+      return wrap;
+    }
+    // Autres fichiers génériques
+    const ico = document.createElement('span'); ico.textContent='📁'; wrap.appendChild(ico);
+    const t = document.createElement('span'); t.textContent = short; t.className='truncate'; wrap.appendChild(t);
+    return wrap;
+  }
+
+  // Création DOM d'un message (contenu + pièces jointes)
+  window.createMessageElement = function(m) {
+    const row = document.createElement('div');
+    row.id = 'msg-' + m.id;
+    row.className = 'flex items-start gap-3';
+
+    const bubble = document.createElement('div');
+    bubble.className = (m.is_mine
+      ? 'max-w-[75%] bg-emerald-400 text-white px-3 py-2 rounded-2xl shadow'
+      : 'max-w-[75%] bg-gray-100 text-gray-900 px-3 py-2 rounded-2xl shadow');
+
+    // Cas spécial: message supprimé -> rendu minimaliste et autonome
+    if (m.deleted) {
+      try {
+        // Style neutre
+        bubble.className = 'p-3 rounded-xl bg-gray-100 text-gray-600';
+        // Nom du supprimeur (suit l'avatar/initiales) — toujours le nom complet
+        const nm = String(m.deleter_name || '').trim();
+        if (nm){
+          const nameRow = document.createElement('div');
+          nameRow.className = 'text-xs font-semibold text-gray-700';
+          nameRow.textContent = nm;
+          bubble.appendChild(nameRow);
+        }
+        // Texte (différent pour l'initiateur)
+        const delDiv = document.createElement('div');
+        delDiv.className = 'text-sm italic';
+        delDiv.textContent = m.deleter_is_me ? 'Vous avez supprimé ce message.' : 'Ce message a été supprimé.';
+        bubble.appendChild(delDiv);
+
+        // Horodatage
+        const meta = document.createElement('div');
+        meta.className = 'mt-2 text-[11px] text-gray-500';
+        meta.textContent = (window.FH_formatDateTime ? window.FH_formatDateTime(m) : '');
+        bubble.appendChild(meta);
+
+        // Ordre avatar/bulle
+        const avatar = createDeleterAvatar(m);
+        if (m.is_mine){
+          row.classList.add('justify-end');
+          row.appendChild(bubble);
+          row.appendChild(avatar);
+        } else {
+          row.appendChild(avatar);
+          row.appendChild(bubble);
+        }
+        return row;
+      } catch(_){}
+    }
+
+    // Avatar de l'auteur (chemin non-supprimé)
+    const avatar = createAvatar(m);
+
+    // Nom complet de l'auteur
+    try {
+      const nm = String(m.author_name || '').trim();
+      if (nm) {
+        const nameRow = document.createElement('div');
+        nameRow.className = 'text-xs font-semibold ' + (m.is_mine ? 'text-white/90' : 'text-gray-700');
+        nameRow.textContent = nm;
+        bubble.appendChild(nameRow);
+      }
+    } catch(_){}
+
+    // Contexte de réponse (désactivé pour messages supprimés)
+    if (!m.deleted && m.reply_to_id) {
+      try {
+        const parent = messagesById[m.reply_to_id];
+        // Si le parent est supprimé, ne pas afficher de contexte de réponse
+        if (parent && parent.deleted) { throw new Error('skip-reply-context'); }
+        const ref = document.createElement('div');
+        // Style neutre et bordé pour une visibilité égale des deux côtés
+        ref.className = 'mb-2 text-xs rounded px-2 py-1 bg-white text-gray-700 border';
+        // Contexte: si réponse à une PJ, afficher mini aperçu; sinon, extrait texte/nom par défaut
+        ref.innerHTML = '';
+        if (m.reply_to_attachment_id && parent && Array.isArray(parent.attachments)){
+          const att = parent.attachments.find(a => a.id === m.reply_to_attachment_id);
+          if (att){
+            ref.appendChild(renderAttachmentMini(att));
+          } else {
+            const txt = document.createElement('span');
+            const base = (parent && (parent.content || ((parent.attachments && parent.attachments[0] && parent.attachments[0].name) || 'Message'))) || 'Message précédent';
+            txt.textContent = String(base).slice(0,80) + (String(base).length>80 ? '…' : '');
+            ref.appendChild(txt);
+          }
+        } else {
+          const txt = document.createElement('span');
+          const hasAtt = parent && Array.isArray(parent.attachments) && parent.attachments.length > 0;
+          const base = (parent && (parent.content || (hasAtt ? (parent.attachments[0].name || 'Pièce jointe') : 'Message'))) || 'Message précédent';
+          txt.textContent = String(base).slice(0,80) + (String(base).length>80 ? '…' : '');
+          ref.appendChild(txt);
+        }
+        ref.style.cursor = 'pointer';
+        ref.addEventListener('click', function(e){ e.preventDefault(); if (m.reply_to_id) fhScrollToMessage(m.reply_to_id); });
+        bubble.appendChild(ref);
+      } catch(_){}
+    }
+
+    // Contenu texte simple avec retours à la ligne
+    const txt = document.createElement('div');
+    const content = String(m.content || '');
+    if (content) {
+      // Remplacer retours à la ligne par <br>
+      txt.innerHTML = content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      bubble.appendChild(txt);
+    }
+
+    // Pièces jointes (premier rendu simple)
+    if (Array.isArray(m.attachments) && m.attachments.length){
+      const list = document.createElement('div');
+      list.className = (content ? 'mt-2 ' : '') + 'flex flex-wrap gap-2';
+      m.attachments.forEach(att => {
+        try {
+          const mime = (att.mime || '').toLowerCase();
+          if (mime.startsWith('image/')){
+            const img = document.createElement('img');
+            img.src = att.url; img.alt = att.name || 'Image';
+            img.className = 'max-w-xs rounded cursor-pointer block';
+            img.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+            list.appendChild(img);
+          } else if (mime.startsWith('video/')){
+            list.appendChild(renderVideoThumb(att));
+          } else if ((att.name||'').toLowerCase().endsWith('.pdf')){
+            if (att.thumb_url){
+              const wrap = document.createElement('div');
+              wrap.className = 'inline-block relative';
+              const img = document.createElement('img');
+              img.src = att.thumb_url; img.alt = att.name || 'Document PDF';
+              img.className = 'max-w-xs rounded cursor-pointer block border';
+              img.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+              wrap.appendChild(img);
+              const badge = document.createElement('div');
+              badge.className = 'absolute left-2 bottom-2 px-1.5 py-0.5 rounded text-[10px] bg-black/70 text-white';
+              badge.textContent = (att.pages && att.pages>0) ? `PDF · ${att.pages}p` : 'PDF';
+              wrap.appendChild(badge);
+              list.appendChild(wrap);
+            } else {
+              const pdf = document.createElement('button');
+              pdf.type = 'button';
+              pdf.className = 'px-2 py-1 rounded border bg-white text-sm';
+              pdf.textContent = att.name || 'Document PDF';
+              pdf.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+              list.appendChild(pdf);
+            }
+          } else if (/\.(zip|rar|7z)$/i.test(att.name||'')){
+            list.appendChild(renderArchiveCard(att, !!m.is_mine));
+          } else if (/\.((docx?|rtf|odt)|(xlsx?|csv)|(pptx?)|txt)$/i.test(att.name||'')){
+            list.appendChild(renderDocCard(att, !!m.is_mine));
+          } else {
+            // Fichiers génériques
+            const card = document.createElement('div');
+            card.className = 'inline-flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-200 bg-white shadow-sm cursor-pointer max-w-xs';
+            const icon = document.createElement('div'); icon.className='w-8 h-8 rounded bg-gray-100 text-gray-700 flex items-center justify-center text-lg'; icon.textContent='📁';
+            const info = document.createElement('div'); info.className='min-w-0';
+            const name = document.createElement('div'); name.className='truncate max-w-[12rem] text-gray-900 font-medium text-sm'; name.textContent = att.name || 'Fichier';
+            const meta = document.createElement('div'); meta.className='text-[11px] text-gray-500'; meta.textContent = (typeof att.size_bytes==='number')? humanSize(att.size_bytes):'';
+            info.appendChild(name); info.appendChild(meta);
+            card.appendChild(icon); card.appendChild(info);
+            card.addEventListener('click', (e)=>{ e.preventDefault(); openFileModal(att); });
+            list.appendChild(card);
+          }
+        } catch(_){ }
+      });
+      bubble.appendChild(list);
+    }
+
+    // Horodatage du message
+    const meta = document.createElement('div');
+    meta.className = 'mt-2 text-[11px] ' + (m.is_mine ? 'text-white/80' : 'text-gray-500');
+    meta.textContent = (window.FH_formatDateTime ? window.FH_formatDateTime(m) : '');
+    bubble.appendChild(meta);
+
+    // Badge "Modifié" si nécessaire (rendu initial) — pas pour les messages supprimés
+    if (!m.deleted && m.edited) { try { ensureEditedBadge(bubble); } catch(_){} }
+
+    // Actions
+    bubble.appendChild(renderUnifiedActions(m));
+
+    // Ordre avatar/bulle
+    if (m.is_mine){
+      row.classList.add('justify-end');
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    } else {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    }
+
+    return row;
+  };
+
+  // Un seul set d’actions par message
+  function renderUnifiedActions(m){
+    const hasAtts = Array.isArray(m.attachments) && m.attachments.length > 0;
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-2 mt-2 text-xs';
+
+    // plus de bouton "Ouvrir" — documents cliquables via les cartes
+
+    // Répondre (unique)
+    const replyBtn = document.createElement('button');
+    replyBtn.type = 'button';
+    replyBtn.className = 'px-2 py-1 rounded hover:bg-gray-200';
+    replyBtn.textContent = 'Répondre';
+    replyBtn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      replyToId = m.id;
+      const hasAtts = Array.isArray(m.attachments) && m.attachments.length > 0;
+      // Auto-associer la première pièce jointe si présente, sinon réponse au message global
+      replyToAttachmentId = hasAtts ? (m.attachments[0].id || null) : null;
+      replyBox.classList.remove('hidden');
+
+      // Snippet: mini aperçu si PJ, sinon extrait du message
+      replySnippet.innerHTML = '';
+      if (hasAtts) {
+        replySnippet.appendChild(renderAttachmentMini(m.attachments[0]));
+      } else {
+        const base = (m.content || 'Message');
+        const snip = String(base);
+        replySnippet.textContent = snip.slice(0,120) + (snip.length>120 ? '...' : '');
+      }
+
+      // Cacher le picker de ciblage de pièce jointe (réponse directe, sans boutons)
+      const picker = document.getElementById('reply-attachment-picker');
+      const options = document.getElementById('reply-attachment-options');
+      if (picker) picker.classList.add('hidden');
+      if (options) options.innerHTML = '';
+
+      messageInput && messageInput.focus();
+      replyBox.classList.add('ring-2','ring-emerald-300');
+      setTimeout(()=> replyBox.classList.remove('ring-2','ring-emerald-300'), 1200);
+    });
+    actions.appendChild(replyBtn);
+
+    if (hasAtts){
+      // Télécharger toutes les PJ en une seule archive ZIP
+      const dlAll = document.createElement('button');
+      dlAll.type = 'button';
+      dlAll.className = 'px-2 py-1 rounded border';
+      dlAll.textContent = 'Télécharger';
+      dlAll.addEventListener('click', (e)=>{
+        e.preventDefault();
+        try {
+          const a = document.createElement('a');
+          a.href = getZipUrl(m.id);
+          a.setAttribute('download', '');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch(_){}
+      });
+      actions.appendChild(dlAll);
+    }
+
+    // Supprimer (unique par message)
+    if (m.is_mine && m.can_delete){
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'px-2 py-1 rounded hover:bg-gray-200 text-red-600';
+      delBtn.textContent = 'Supprimer';
+      delBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        openDeleteModal(m);
+      });
+      actions.appendChild(delBtn);
+    }
+
+    // Modifier
+    if (m.is_mine && m.can_edit && (!m.attachments || m.attachments.length === 0)) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'px-2 py-1 rounded hover:bg-gray-200 text-blue-600';
+      editBtn.textContent = 'Modifier';
+      editBtn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openEditModal(m);
+      });
+      actions.appendChild(editBtn);
+    }
+
+    return actions;
+  }
+
+  function getDeleteUrl(id){ return DELETE_URL_TEMPLATE.replace('/0/', '/' + id + '/'); }
+  function getAttachmentDeleteUrl(id){ return ATTACHMENT_DELETE_URL_TEMPLATE.replace('/0/', '/' + id + '/'); }
+
+  function getEditUrl(id){ return EDIT_URL_TEMPLATE.replace('/0/', '/' + id + '/'); }
+  function getZipUrl(id){ return ZIP_URL_TEMPLATE.replace('/0/', '/' + id + '/'); }
+  function getZipManifestUrl(attId){ return ZIP_MANIFEST_URL_TEMPLATE.replace('/0/', '/' + attId + '/'); }
+  function getZipFileUrl(attId, p, dl){
+    const u = ZIP_FILE_URL_TEMPLATE.replace('/0/', '/' + attId + '/');
+    const q = 'p=' + encodeURIComponent(p || '');
+    return u + '?' + q + (dl ? '&dl=1' : '');
+  }
+
+  function openArchiveModal(att){
+    const modal = document.getElementById('fh-zip-modal');
+    const body = document.getElementById('fh-zip-body');
+    const title = document.getElementById('fh-zip-title');
+    const sub = document.getElementById('fh-zip-sub');
+    if (!modal || !body) return;
+    if (title) title.textContent = 'Contenu de l\u2019archive — ' + (att.name || '');
+    if (sub) sub.textContent = '';
+    body.innerHTML = '';
+    const loading = document.createElement('div'); loading.className='text-sm text-gray-500'; loading.textContent='Chargement…'; body.appendChild(loading);
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    fetch(getZipManifestUrl(att.id), { credentials: 'same-origin', headers: { 'Accept':'application/json' } })
+      .then(r=>{ if(!r.ok) throw new Error('net'); return r.json(); })
+      .then(resp=>{
+        if (!resp || !resp.ok){ body.innerHTML = '<div class="text-sm text-red-500">Impossible de lire l\u2019archive.</div>'; return; }
+        if (sub) sub.textContent = resp.name || '';
+        const items = Array.isArray(resp.items) ? resp.items : [];
+        const list = document.createElement('div');
+        list.className = 'space-y-1';
+        items.forEach(it=>{
+          const isDir = !!it.is_dir;
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between gap-3 px-2 py-1 rounded border bg-white';
+          const left = document.createElement('div'); left.className='min-w-0 flex items-center gap-2';
+          const ico = document.createElement('span'); ico.textContent = isDir ? '📁' : '📄';
+          const name = document.createElement('div'); name.className='truncate text-sm'; name.textContent = (it.path || '').replace(/\\/g,'/');
+          const meta = document.createElement('div'); meta.className='text-[11px] text-gray-500'; meta.textContent = isDir ? '' : (typeof it.size==='number' ? humanSize(it.size) : '');
+          left.appendChild(ico); left.appendChild(name); left.appendChild(meta);
+          row.appendChild(left);
+          if (!isDir){ row.style.cursor='pointer'; row.addEventListener('click', (e)=>{ e.preventDefault(); const url = getZipFileUrl(att.id, it.path, false); const pseudo = { url, name: (it.path||'').split('/').pop(), mime: (it.mime||'') }; openFileModal(pseudo); }); }
+          list.appendChild(row);
+        });
+        body.innerHTML=''; body.appendChild(list);
+        const dlAllWrap = document.createElement('div');
+        dlAllWrap.className = 'mt-4 pt-3 border-t flex justify-end';
+        const dlAllBtn = document.createElement('a');
+        dlAllBtn.className = 'px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-1';
+        dlAllBtn.textContent = 'Télécharger l\'archive compressée';
+        dlAllBtn.href = att && att.url ? att.url : '#';
+        if (att && att.name) dlAllBtn.setAttribute('download', att.name); else dlAllBtn.setAttribute('download', '');
+        dlAllWrap.appendChild(dlAllBtn);
+        body.appendChild(dlAllWrap);
+      })
+      .catch(()=>{ body.innerHTML = '<div class="text-sm text-red-500">Impossible de lire l\u2019archive.</div>'; });
+    const closeBtn = document.getElementById('fh-zip-close');
+    if (closeBtn) closeBtn.onclick = closeArchiveModal;
+    modal.onclick = function(e){ if(e.target === modal) closeArchiveModal(); };
+    document.addEventListener('keydown', function onZipEsc(e){ if (e.key === 'Escape') { closeArchiveModal(); document.removeEventListener('keydown', onZipEsc); } });
+  }
+
+  function closeArchiveModal(){
+    const modal = document.getElementById('fh-zip-modal');
+    if (!modal) return;
+    modal.classList.add('hidden'); modal.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+
+  // --- Helpers DOM pour mise à jour d'un message déjà rendu ---
+  function updateMessageContentDOM(id, newContent){
+    try {
+      const msgEl = document.getElementById('msg-' + id);
+      if (!msgEl) return;
+      const bubble = msgEl.children[1] || msgEl.querySelector('div');
+      if (!bubble) return;
+      const contentDiv = Array.from(bubble.children).find(c => c && c.classList && c.classList.contains('text-sm'));
+      if (!contentDiv) return;
+      contentDiv.innerHTML = fhRenderRichContent(newContent || '');
+    } catch(e){}
+  }
+
+  // --- Modale de suppression ---
+  const fhDeleteModal = document.getElementById('fh-delete-modal');
+  const fhDeleteClose = document.getElementById('fh-delete-close');
+  const fhDelSelf = document.getElementById('fh-del-self');
+  const fhDelAll = document.getElementById('fh-del-all');
+  const fhDelCancel = document.getElementById('fh-del-cancel');
+  const fhDelHint = document.getElementById('fh-del-hint');
+
+  function openDeleteModal(m){
+    try {
+      fhDeletingMessage = m;
+      const now = Date.now();
+      const age = now - (m.created_at_ts || now);
+      const within = age <= DELETE_WINDOW_MS;
+      if (within) {
+        fhDelAll && fhDelAll.classList.remove('hidden');
+        if (fhDelHint) fhDelHint.textContent = 'Vous pouvez supprimer ce message pour tout le monde pendant 5 minutes après son envoi.';
+      } else {
+        fhDelAll && fhDelAll.classList.add('hidden');
+        if (fhDelHint) fhDelHint.textContent = "La suppression globale n'est plus possible (délai dépassé).";
+      }
+      if (fhDeleteModal){
+        fhDeleteModal.classList.remove('hidden'); fhDeleteModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+      }
+    } catch(e){}
+  }
+
+  function closeDeleteModal(){
+    fhDeletingMessage = null;
+    if (fhDeleteModal){ fhDeleteModal.classList.add('hidden'); fhDeleteModal.classList.remove('flex'); }
+    document.body.style.overflow = '';
+  }
+
+  function applyDelete(scope){
+    const m = fhDeletingMessage; if (!m) return;
+    fetch(getDeleteUrl(m.id), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+      body: JSON.stringify({ scope })
+    }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error(t || 'Erreur suppression'); }); return r.json(); })
+      .then(resp => {
+        if (resp && resp.ok){
+          if (resp.deleted_for === 'self'){
+            const msgEl = document.getElementById('msg-' + m.id);
+            if (msgEl) msgEl.remove();
+          } else {
+            const msgEl = document.getElementById('msg-' + m.id);
+            if (msgEl){
+              const bubble = msgEl.children[1] || msgEl.querySelector('div');
+              if (bubble){
+                bubble.className = 'p-3 rounded-xl bg-gray-100 text-gray-600';
+                bubble.innerHTML = '';
+                const delDiv = document.createElement('div');
+                delDiv.className = 'text-sm italic';
+                delDiv.textContent = 'Ce message a été supprimé.';
+                bubble.appendChild(delDiv);
+                const meta = document.createElement('div');
+                meta.className = 'mt-2 text-[11px] text-gray-500';
+                meta.textContent = (window.FH_formatDateTime ? window.FH_formatDateTime(m) : '');
+                bubble.appendChild(meta);
+              }
+            }
+          }
+          showToast('Message supprimé', 'success', 3);
+          closeDeleteModal();
+        } else {
+          showToast('Erreur: ' + (resp && resp.error ? resp.error : 'suppression impossible'), 'error', 5);
+        }
+      }).catch(err=> { console.error(err); showToast('Erreur lors de la suppression', 'error', 4); });
+  }
+
+  if (fhDeleteClose) fhDeleteClose.addEventListener('click', closeDeleteModal);
+  if (fhDelCancel) fhDelCancel.addEventListener('click', closeDeleteModal);
+  if (fhDeleteModal) fhDeleteModal.addEventListener('click', (e)=>{ if (e.target === fhDeleteModal) closeDeleteModal(); });
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && fhDeleteModal && !fhDeleteModal.classList.contains('hidden')) closeDeleteModal(); });
+  if (fhDelSelf) fhDelSelf.addEventListener('click', ()=> applyDelete('self'));
+  if (fhDelAll) fhDelAll.addEventListener('click', ()=> applyDelete('everyone'));
+
+  // --- Modale d'édition ---
+  let fhEditingMessageId = null;
+
+  const fhEditModal = document.getElementById('fh-edit-modal');
+  const fhEditTextarea = document.getElementById('fh-edit-textarea');
+  const fhEditClose = document.getElementById('fh-edit-close');
+  const fhEditCancel = document.getElementById('fh-edit-cancel');
+  const fhEditApply = document.getElementById('fh-edit-apply');
+
+  function openEditModal(message){
+    try {
+      fhEditingMessageId = message.id;
+      fhEditTextarea.value = message.content || '';
+      fhEditModal.classList.remove('hidden'); fhEditModal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+      setTimeout(()=> fhEditTextarea && fhEditTextarea.focus(), 0);
+    } catch(e){}
+  }
+
+  function closeEditModal(){
+    fhEditingMessageId = null;
+    fhEditModal.classList.add('hidden'); fhEditModal.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+
+  if (fhEditClose) fhEditClose.addEventListener('click', closeEditModal);
+  if (fhEditCancel) fhEditCancel.addEventListener('click', closeEditModal);
+  if (fhEditModal) fhEditModal.addEventListener('click', (e)=>{ if (e.target === fhEditModal) closeEditModal(); });
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !fhEditModal.classList.contains('hidden')) closeEditModal(); });
+
+  if (fhEditApply) fhEditApply.addEventListener('click', ()=>{
+    const id = fhEditingMessageId;
+    if (!id) return;
+    const msg = messagesById[id];
+    if (!msg) return;
+    const newText = (fhEditTextarea.value || '').trim();
+    if (!newText){ showToast('Le contenu ne peut pas être vide.', 'error', 4); return; }
+
+    fetch(getEditUrl(id), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+      body: JSON.stringify({ content: newText })
+    }).then(r => { if (!r.ok) return r.text().then(t=>{ throw new Error(t || 'Erreur édition'); }); return r.json(); })
+      .then(resp => {
+        if (resp && resp.ok){
+          // Mettre à jour l'état et le DOM
+          msg.content = resp.content || newText;
+          msg.edited = true;
+          messagesById[id] = msg;
+
+          updateMessageContentDOM(id, msg.content);
+
+          const msgEl = document.getElementById('msg-' + id);
+          const bubble = msgEl && (msgEl.children[1] || msgEl.querySelector('div'));
+          if (bubble) ensureEditedBadge(bubble);
+
+          showToast('Message modifié.', 'success', 3);
+          closeEditModal();
+        } else {
+          showToast('Erreur: ' + (resp && resp.error ? resp.error : 'édition impossible'), 'error', 5);
+        }
+      }).catch(err => { console.error(err); showToast("Erreur réseau lors de l'édition.", 'error', 5); });
+  });
+
+  function ensureEditedBadge(bubble){
+    let badgeRow = bubble.querySelector('.fh-edited-row');
+    if (!badgeRow){
+      badgeRow = document.createElement('div');
+      badgeRow.className = 'fh-edited-row mt-1 text-[11px] text-right';
+      bubble.appendChild(badgeRow);
+    }
+    badgeRow.textContent = 'Modifié';
+    // Style adapté à thème
+    if (bubble.className.includes('bg-emerald-400')) {
+      badgeRow.classList.add('text-white/90');
+    } else {
+      badgeRow.classList.add('text-gray-500');
+    }
+  }
+
+  // Variables pour le chargement optimisé
+  let isLoading = false;
+  let lastScrollTop = 0;
+  let scrollDebounce = null;
+  let messageElements = new Map();
+  let lastMessageId = null;
+  let hasMoreMessages = true;
+  const MESSAGES_PER_PAGE = 20;
+
+  // Détection précise du bas de page avec seuil
+  function atBottom(threshold = 50) {
+    const area = document.getElementById('messages-area');
+    if (!area) return true;
+    const { scrollTop, scrollHeight, clientHeight } = area;
+    return scrollHeight - (scrollTop + clientHeight) < threshold;
+  }
+  
+  // Rendre les fonctions et variables disponibles globalement
+  window.atBottom = atBottom;
+  window.messagesById = window.messagesById || {};
+
+  // Fonction de debounce personnalisée
+  function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  // Gestion du défilement avec debounce
+  function handleScroll() {
+    if (isLoading || !hasMoreMessages) return;
+    
+    // Vérifier si l'utilisateur fait défiler vers le haut
+    if (messagesArea.scrollTop < 100 && messagesArea.scrollTop < lastScrollTop) {
+      loadMoreMessages();
+    }
+    
+    lastScrollTop = messagesArea.scrollTop;
+  }
+
+  // Charger plus de messages (défilement vers le haut)
+  function loadMoreMessages() {
+    if (isLoading || !hasMoreMessages) return;
+    
+    isLoading = true;
+    const oldestMessage = Array.from(messageElements.keys())[0];
+    const url = `${LIST_URL}?before=${oldestMessage || ''}&limit=${MESSAGES_PER_PAGE}`;
+    
+    fetch(url, { credentials: 'same-origin', headers: {'Accept':'application/json'} })
+      .then(r => r.ok ? r.json() : Promise.reject('Erreur réseau'))
+      .then(data => {
+        if (!data.ok || !data.messages) throw new Error('Réponse invalide');
+        
+        const newMessages = data.messages || [];
+        if (newMessages.length === 0) {
+          hasMoreMessages = false;
+          return;
+        }
+        
+        // Sauvegarder la position de défilement actuelle
+        const firstMessage = messagesArea.firstChild;
+        const firstMessageOffset = firstMessage ? firstMessage.offsetTop : 0;
+        const scrollPosition = messagesArea.scrollTop;
+        
+        // Ajouter les nouveaux messages au début
+        const fragment = document.createDocumentFragment();
+        newMessages.reverse().forEach(m => {
+          if (!messageElements.has(m.id)) {
+            const el = createMessageElement(m);
+            messageElements.set(m.id, el);
+            messagesById[m.id] = m;
+            fragment.prepend(el);
+          }
+        });
+        
+        if (fragment.hasChildNodes()) {
+          messagesArea.insertBefore(fragment, messagesArea.firstChild);
+          
+          // Ajuster la position de défilement pour maintenir la position de lecture
+          if (firstMessage) {
+            const newFirstMessage = messagesArea.firstChild;
+            const newOffset = firstMessage.offsetTop - newFirstMessage.offsetTop;
+            messagesArea.scrollTop = scrollPosition + newOffset;
+          }
+        }
+        
+        // Mettre à jour le dernier ID de message chargé
+        if (newMessages.length > 0) {
+          lastMessageId = newMessages[newMessages.length - 1].id;
+        }
+      })
+      .catch(err => {
+        console.error('Erreur lors du chargement des messages :', err);
+        showToast('Erreur lors du chargement des messages', 'error', 3);
+      })
+      .finally(() => {
+        isLoading = false;
+      });
+  }
+
+  // Fonction pour charger les messages (déclarée une seule fois)
+  if (typeof window.loadMessages === 'undefined') {
+    window.loadMessages = function(forceReload = false) {
+    if (isLoading) return;
+    
+    isLoading = true;
+    
+    // Afficher un indicateur de chargement uniquement si c'est le premier chargement
+    if (forceReload || messageElements.size === 0) {
+      const loadingDiv = document.createElement('div');
+      loadingDiv.id = 'loading-indicator';
+      loadingDiv.className = 'text-sm text-gray-500 py-4 text-center';
+      loadingDiv.textContent = 'Chargement des messages...';
+      messagesArea.innerHTML = '';
+      messagesArea.appendChild(loadingDiv);
+    }
+    
+    const url = forceReload || messageElements.size === 0 
+      ? `${LIST_URL}?limit=${MESSAGES_PER_PAGE}`
+      : `${LIST_URL}?after=${lastMessageId || ''}&limit=${MESSAGES_PER_PAGE}`;
+    
+    fetch(url, { 
+      credentials: 'same-origin', 
+      headers: {'Accept':'application/json'} 
+    })
+      .then(r => r.ok ? r.json() : Promise.reject('Erreur réseau'))
+      .then(data => {
+        if (!data.ok || !Array.isArray(data.messages)) {
+          throw new Error('Réponse invalide');
+        }
+        
+        const msgs = data.messages || [];
+        
+        if (forceReload || messageElements.size === 0) {
+          // Premier chargement ou rechargement forcé
+          messagesArea.innerHTML = '';
+          messageElements.clear();
+          messagesById = {};
+          
+          if (msgs.length === 0) {
+            messagesArea.innerHTML = '<div class="text-sm text-gray-500 py-4 text-center">Aucun message.</div>';
+            return;
+          }
+        } else if (msgs.length === 0) {
+          // Pas de nouveaux messages
+          return;
+        }
+        
+        // Filtrer les messages qui ne sont pas déjà affichés
+        const newMessages = msgs.filter(m => !messageElements.has(m.id));
+        
+        if (newMessages.length === 0) return;
+        
+        const fragment = document.createDocumentFragment();
+        newMessages.forEach(m => {
+          const el = createMessageElement(m);
+          messageElements.set(m.id, el);
+          messagesById[m.id] = m;
+          fragment.appendChild(el);
+        });
+        
+        // Vérifier si nous étions en bas de la zone de messages avant l'ajout
+        const wasAtBottom = atBottom(100);
+        
+        // Ajouter les nouveaux messages
+        messagesArea.appendChild(fragment);
+        
+        // Mettre à jour le dernier ID de message
+        lastMessageId = newMessages[newMessages.length - 1].id;
+        
+        // Faire défiler vers le bas uniquement si l'utilisateur était déjà en bas
+        if (wasAtBottom) {
+          messagesArea.scrollTop = messagesArea.scrollHeight;
+        } else if (newMessages.length > 0) {
+          // Montrer un indicateur de nouveaux messages
+          showNewMessageIndicator(newMessages.length);
+        }
+        
+        hasMoreMessages = msgs.length >= MESSAGES_PER_PAGE;
+      })
+      .catch(err => {
+        console.error('Erreur lors du chargement des messages :', err);
+        if (messageElements.size === 0) {
+          messagesArea.innerHTML = '<div class="text-sm text-red-500 py-4 text-center">Impossible de charger les messages. <button class="text-blue-600 underline" onclick="if (typeof window.loadMessages === \'function\') window.loadMessages(true);">Réessayer</button></div>';
+        } else {
+          showToast('Erreur lors du chargement des messages', 'error', 3);
+        }
+      })
+      .finally(() => {
+        isLoading = false;
+        const loadingDiv = document.getElementById('loading-indicator');
+        if (loadingDiv) loadingDiv.remove();
+      });
+    };
+  }
+
+  // Ajouter l'écouteur d'événements pour le défilement
+  if (messagesArea) {
+    messagesArea.addEventListener('scroll', debounce(handleScroll, 150));
+  }
+
+  // Fonction d'initialisation des messages
+  window.initializeMessages = function() {
+    if (typeof window.loadMessages === 'function') {
+      window.loadMessages();
+    }
+    
+    // Configurer le polling pour les nouveaux messages (toutes les 10 secondes)
+    setInterval(() => {
+      if (window.atBottom && typeof window.atBottom === 'function' && 
+          window.atBottom() && 
+          typeof window.loadMessages === 'function') {
+        window.loadMessages();
+      }
+    }, 10000);
+  }
+
+  // Prévisualisation fichiers choisis
+  attachmentsInput.addEventListener('change', function(){
+    filePreview.innerHTML = '';
+    const files = Array.from(attachmentsInput.files || []);
+    // Optionnel: prévenir si trop volumineux (doit refléter la valeur serveur; adapter si besoin)
+    const MAX_MB = 200; // maintenir aligné avec settings.FORUM_MAX_UPLOAD_MB
+    const MAX_BYTES = MAX_MB * 1024 * 1024;
+    const tooBig = files.find(f => (f.size || 0) > MAX_BYTES);
+    if (tooBig) {
+      showToast(`Le fichier "${tooBig.name}" dépasse ${MAX_MB}MB.`, 'error', 5);
+    }
+    files.forEach(f => {
+      const p = document.createElement('div');
+      p.className = 'px-2 py-1 rounded bg-gray-50 border border-gray-200 text-sm';
+      p.textContent = f.name + ' (' + Math.round(f.size/1024) + ' KB)';
+      filePreview.appendChild(p);
+    });
+  });
+
+  // Annuler réponse
+  replyCancel.addEventListener('click', function(){
+    replyToId = null;
+    replyToAttachmentId = null;
+    replyBox.classList.add('hidden');
+  });
+
+  // Envoi message (groupé)
+  messageForm.addEventListener('submit', function(e){
+    e.preventDefault();
+
+    // Lire la sélection depuis l'état global exposé par le picker
+    const selSticker = (typeof window.fhSelectedStickerUrl === 'string' && window.fhSelectedStickerUrl) ? window.fhSelectedStickerUrl : '';
+    const selGif = (typeof window.fhSelectedGifUrl === 'string' && window.fhSelectedGifUrl) ? window.fhSelectedGifUrl : '';
+
+    // Construire le contenu: texte + (0..1 GIF) + (0..1 Sticker)
+    const baseText = (messageInput.value || '').trim();
+    const codes = [];
+    if (selGif) codes.push(`[gif src="${selGif}"]`);
+    if (selSticker) codes.push(`[sticker src="${selSticker}"]`);
+    const contentToSend = [baseText, ...codes].filter(Boolean).join(baseText ? ' ' : '');
+
+    const files = attachmentsInput.files;
+
+    // validation: au moins du texte, un GIF, un sticker, ou des fichiers
+    if (!contentToSend && (!files || files.length === 0)) return;
+
+    // Branches: multipart si fichiers, sinon JSON
+    if (files && files.length > 0){
+      const fd = new FormData();
+      fd.append('content', contentToSend);
+      if (replyToId) fd.append('reply_to', replyToId);
+      if (replyToAttachmentId) fd.append('reply_to_attachment', replyToAttachmentId);
+      for (let i=0;i<files.length;i++){ fd.append('attachments', files[i], files[i].name); }
+      const prog = document.querySelector('#fh-upload-progress');
+      if (prog){ prog.classList.remove('hidden'); const b = prog.querySelector('div'); if (b) b.style.width = '0%'; }
+      postMultipartWithProgress(fd, function(loaded, total){
+        const p = Math.max(0, Math.min(100, total ? Math.round((loaded/total)*100) : 0));
+        const b = document.querySelector('#fh-upload-progress > div');
+        if (b){ b.style.width = p + '%'; }
+      }).then(resp => {
+        if (resp.ok) {
+          messageInput.value = ''; attachmentsInput.value = ''; filePreview.innerHTML = '';
+          window.fhSelectedGifUrl = '';
+          window.fhSelectedStickerUrl = '';
+          if (window.fhRenderComposePreview) window.fhRenderComposePreview();
+          if (window.fhRenderModalPreview) window.fhRenderModalPreview();
+          replyToId = null; replyToAttachmentId = null; replyBox.classList.add('hidden');
+          if (typeof window.loadMessages === 'function') {
+            window.loadMessages(true);
+          }
+        } else {
+          showToast('Erreur : ' + (resp && resp.error ? resp.error : 'édition impossible'), 'error', 5);
+        }
+      }).catch(err => { console.error(err); showToast("Erreur réseau lors de l'envoi.", 'error', 5); });
+    } else {
+      const payload = { content: contentToSend };
+      if (replyToId) payload.reply_to = replyToId;
+      if (replyToAttachmentId) payload.reply_to_attachment = replyToAttachmentId;
+      fetch(LIST_URL, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error(t || 'Erreur envoi'); }); return r.json(); })
+        .then(resp => {
+          if (resp.ok) {
+            messageInput.value = '';
+            // Réinitialiser l'état global de sélection
+            window.fhSelectedGifUrl = '';
+            window.fhSelectedStickerUrl = '';
+            if (window.fhRenderComposePreview) window.fhRenderComposePreview();
+            if (window.fhRenderModalPreview) window.fhRenderModalPreview();
+            replyToId = null; replyToAttachmentId = null; replyBox.classList.add('hidden');
+            if (typeof window.loadMessages === 'function') {
+            window.loadMessages(true);
+          }
+          } else {
+            showToast('Erreur : ' + (resp && resp.error ? resp.error : 'édition impossible'), 'error', 5);
+          }
+        }).catch(err => { console.error(err); showToast("Erreur réseau lors de l'envoi.", 'error', 5); });
+    }
+  });
+
+  // Fonction pour afficher un indicateur de nouveaux messages
+  function showNewMessageIndicator(count) {
+    // Supprimer l'indicateur existant s'il y en a un
+    const existingIndicator = document.getElementById('new-messages-indicator');
+    if (existingIndicator) existingIndicator.remove();
+    
+    if (count > 0) {
+      const indicator = document.createElement('div');
+      indicator.id = 'new-messages-indicator';
+      indicator.className = 'fixed bottom-24 right-4 bg-blue-500 text-white text-sm font-medium px-3 py-2 rounded-full shadow-lg cursor-pointer z-10';
+      indicator.innerHTML = `
+        <span>${count} nouveau${count > 1 ? 'x' : ''} message${count > 1 ? 's' : ''}</span>
+        <span class="ml-2">↓</span>
+      `;
+      indicator.onclick = () => {
+        messagesArea.scrollTo({
+          top: messagesArea.scrollHeight,
+          behavior: 'smooth'
+        });
+        indicator.remove();
+      };
+      document.body.appendChild(indicator);
+      
+      // Supprimer automatiquement après 10 secondes
+      setTimeout(() => {
+        if (document.body.contains(indicator)) {
+          indicator.remove();
+        }
+      }, 10000);
+    }
+  }
+  
+  // Fonction pour vérifier les nouveaux messages
+  function checkForNewMessages() {
+    if (isLoading || document.hidden) return;
+    
+    if (!lastMessageId) {
+      // Si on n'a pas encore chargé de messages, faire un chargement complet
+      if (typeof window.loadMessages === 'function') window.loadMessages();
+      return;
+    }
+    
+    fetch(`${LIST_URL}?after=${lastMessageId}&limit=1`, {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'},
+      cache: 'no-store'
+    })
+    .then(r => r.ok ? r.json() : Promise.reject('Erreur réseau'))
+    .then(data => {
+      if (data.ok && Array.isArray(data.messages) && data.messages.length > 0) {
+        // Il y a de nouveaux messages, les charger
+        if (typeof window.loadMessages === 'function') window.loadMessages();
+      }
+    })
+    .catch(err => console.error('Erreur lors de la vérification des nouveaux messages :', err));
+  }
+  
+  // Chargement initial
+  if (typeof window.loadMessages === 'function') window.loadMessages();
+  
+  // Démarrer le polling pour les nouveaux messages
+  polling = setInterval(checkForNewMessages, 5000);
+  
+  // Optimisation : arrêter le polling quand la page n'est pas visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (polling) {
+        clearInterval(polling);
+        polling = null;
+      }
+    } else {
+      if (!polling) {
+        // Vérifier immédiatement les nouveaux messages au retour sur l'onglet
+        checkForNewMessages();
+        // Redémarrer le polling
+        polling = setInterval(checkForNewMessages, 5000);
+      }
+    }
+  });
+})();  // Fermeture de l'IIFE
+
+// Fonction pour poster des données multipart avec suivi de progression
+function postMultipartWithProgress(fd, onProgress){
+  return new Promise(function(resolve, reject){
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', window.FH_LIST_URL || LIST_URL, true);
+      xhr.withCredentials = true;
+      xhr.responseType = 'json';
+      xhr.setRequestHeader('X-CSRFToken', (window.getCookie ? window.getCookie('csrftoken') : ''));
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (xhr.upload && typeof onProgress === 'function'){
+        xhr.upload.onprogress = function(e){ if (e && e.lengthComputable) onProgress(e.loaded, e.total); };
+      }
+      xhr.onerror = function(){ reject(new Error('Network error')); };
+      xhr.onload = function(){
+        if (xhr.status >= 200 && xhr.status < 300){
+          resolve(xhr.response || {});
+        } else {
+          try { resolve(typeof xhr.response === 'object' && xhr.response ? xhr.response : { ok: false, error: String(xhr.responseText||'') }); }
+          catch(_){ reject(new Error('HTTP '+xhr.status)); }
+        }
+      };
+      xhr.send(fd);
+    } catch(e){ reject(e); }
+  });
+}
+
+// ===== GESTION DES WEBSOCKETS =====
+// Définir l'ID utilisateur depuis le template Django
+if (typeof window.currentUserId === 'undefined') {
+  window.currentUserId = "{{ request.user.id|default:'null' }}";
+}
+
+// Initialiser les fonctions globales si elles n'existent pas
+window.handleNewMessage = window.handleNewMessage || function() {};
+window.handleUpdateMessage = window.handleUpdateMessage || function() {};
+window.handleTypingEvent = window.handleTypingEvent || function() {};
+window.handleDeleteMessage = window.handleDeleteMessage || function() {};
+
+let socket = null;
+
+// Fonction pour établir la connexion WebSocket
+window.connectWebSocket = function() {
+  try {
+    // Vérifier si l'ID utilisateur est valide
+    if (window.currentUserId === 'null') {
+      console.warn('Aucun utilisateur connecté, connexion WebSocket annulée');
+      return;
+    }
+
+    // Fermer la connexion existante si elle existe
+    if (socket !== null && socket.readyState === WebSocket.OPEN) {
+      socket.close();
+    }
+
+    // Vérifier si WebSocket est supporté
+    if (!('WebSocket' in window)) {
+      console.warn('WebSocket n\'est pas supporté par votre navigateur');
+      return;
+    }
+
+    // Créer une nouvelle connexion WebSocket
+    const wsScheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const wsUrl = wsScheme + window.location.host + '/ws/forum/';
+    
+    // Créer une nouvelle connexion
+    socket = new WebSocket(wsUrl);
+
+    // Gestionnaire d'ouverture de connexion
+    socket.onopen = function(e) {
+      console.log('Connexion WebSocket établie');
+      // Envoyer l'ID utilisateur si connecté
+      if (window.currentUserId && window.currentUserId !== 'null') {
+        socket.send(JSON.stringify({
+          type: 'auth',
+          user_id: window.currentUserId
+        }));
+      }
+    };
+
+    // Gestionnaire de réception de messages
+    socket.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Message WebSocket reçu:', data);
+
+        if (data.type === 'new_message' && data.message) {
+          window.handleNewMessage(data.message);
+        } else if (data.type === 'message_updated' && data.message) {
+          window.handleUpdateMessage(data.message);
+        } else if (data.type === 'message_deleted' && data.message_id) {
+          window.handleDeleteMessage(data.message_id, data.deleted_for_all || false);
+        } else if (data.type === 'typing' && data.user_id && data.username) {
+          window.handleTypingEvent(data.user_id, data.username);
+        } else if (data.type === 'user_status' && data.user_id && data.status) {
+          console.log(`Utilisateur ${data.user_id} est maintenant ${data.status}`);
+        } else {
+          console.warn('Type de message WebSocket non géré:', data.type);
+        }
+      } catch (error) {
+        console.error('Erreur lors du traitement du message WebSocket:', error, event.data);
+      }
+    };
+
+    // Gestionnaire de fermeture de connexion
+    socket.onclose = function(e) {
+      if (e && e.wasClean) {
+        console.log('WebSocket fermé proprement');
+      } else {
+        console.log('Connexion WebSocket perdue, tentative de reconnexion...');
+        // Tentative de reconnexion après 5 secondes
+        setTimeout(function() {
+          if (window.connectWebSocket && typeof window.connectWebSocket === 'function') {
+            window.connectWebSocket();
+          }
+        }, 5000);
+      }
+    };
+
+    // Gestionnaire d'erreurs
+    socket.onerror = function(error) {
+      console.error('Erreur WebSocket:', error);
+    };
+
+    // Exposer la socket globalement
+    window.socket = socket;
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation de la connexion WebSocket:', error);
+  }
+}
+
+// Fonction d'initialisation principale
+function initializeForum() {
+  try {
+    // Initialiser les messages
+    initializeMessages();
+    
+    // Initialiser la connexion WebSocket
+    if (typeof window.connectWebSocket === 'function') {
+      window.connectWebSocket();
+    }
+    
+    // Initialiser les gestionnaires d'événements
+    if (typeof window.initializeEventHandlers === 'function') {
+      window.initializeEventHandlers();
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation du forum:', error);
+  }
+}
+
+// Démarrer l'initialisation quand le DOM est chargé
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeForum);
+} else {
+  initializeForum();
+}
+
+// Gestion d'un nouveau message
+window.handleNewMessage = function(message) {
+  // Vérifier si le message existe déjà
+  if (!message || !message.id || (window.messagesById && window.messagesById[message.id])) {
+    return;
+  }
+  
+  try {
+    // Créer l'élément du message
+    let messageElement = null;
+    
+    if (typeof window.createMessageElement === 'function') {
+      messageElement = window.createMessageElement(message);
+    }
+    
+    if (!messageElement) {
+      console.warn('Création basique du message');
+      messageElement = document.createElement('div');
+      messageElement.className = 'message';
+      messageElement.textContent = message.content || 'Message sans contenu';
+      messageElement.id = 'msg-' + message.id;
+    }
+    
+    // Ajouter le message à la zone de messages
+    const messagesArea = window.messagesArea || document.getElementById('messages-area');
+    if (messagesArea) {
+      messagesArea.appendChild(messageElement);
+      
+      // Mettre à jour le cache des messages
+      if (!window.messagesById) {
+        window.messagesById = {};
+      }
+      window.messagesById[message.id] = message;
+      
+      // Faire défiler vers le bas si nécessaire
+      if (typeof window.atBottom === 'function' && window.atBottom(100)) {
+        setTimeout(function() {
+          window.scrollTo(0, document.documentElement.scrollHeight);
+        }, 100);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur dans handleNewMessage:', error);
+  }
+};
+
+// Gestion de la mise à jour d'un message
+window.handleUpdateMessage = function(updatedMessage) {
+  try {
+    // Mettre à jour le message dans le cache
+    if (window.messagesById) {
+      window.messagesById[updatedMessage.id] = updatedMessage;
+    }
+    
+    // Mettre à jour l'affichage
+    const messageElement = document.getElementById(`message-${updatedMessage.id}`);
+    if (messageElement && window.createMessageElement) {
+      const newMessageElement = window.createMessageElement(updatedMessage);
+      if (newMessageElement) {
+        messageElement.replaceWith(newMessageElement);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur dans handleUpdateMessage:', error);
+  }
+};
+
+// Gestion de la suppression d'un message
+window.handleDeleteMessage = function(messageId, deletedForAll) {
+  try {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (!messageElement) return;
+    
+    // Mettre à jour le cache
+    if (window.messagesById && window.messagesById[messageId]) {
+      window.messagesById[messageId].deleted = true;
+      window.messagesById[messageId].deleted_for_all = deletedForAll;
+      window.messagesById[messageId].deleted_at = new Date().toISOString();
+      
+      // Mettre à jour l'affichage
+      if (deletedForAll) {
+        // Supprimer complètement le message s'il est supprimé pour tout le monde
+        messageElement.remove();
+      } else {
+        // Marquer le message comme supprimé pour l'utilisateur actuel
+        messageElement.innerHTML = `
+          <div class="flex items-center p-4 text-gray-500">
+            <div class="flex-1">
+              <p class="text-sm">Ce message a été supprimé.</p>
+            </div>
+          </div>`;
+      }
+    }
+  } catch (error) {
+    console.error('Erreur dans handleDeleteMessage:', error);
+  }
+};
+// Gestion de l'événement de frappe
+window.handleTypingEvent = function(userId, username) {
+  try {
+    // Implémentez la logique pour afficher l'indicateur de frappe
+    console.log(`${username} est en train d'écrire...`);
+    
+    // Exemple d'implémentation d'indicateur de frappe
+    const typingIndicator = document.getElementById('typing-indicator');
+    if (typingIndicator) {
+      typingIndicator.textContent = `${username} est en train d'écrire...`;
+      typingIndicator.style.display = 'block';
+      
+      // Masquer l'indicateur après 3 secondes
+      clearTimeout(window.typingTimeout);
+      window.typingTimeout = setTimeout(() => {
+        typingIndicator.style.display = 'none';
+      }, 3000);
+    }
+  } catch (error) {
+    console.error('Erreur dans handleTypingEvent:', error);
+  }
+};
+
+// Fonction d'initialisation des gestionnaires d'événements
+// Initialisation des gestionnaires d'événements
+window.initializeEventHandlers = function() {
+  try {
+    // Détecter quand l'utilisateur commence à taper
+    const messageInput = document.getElementById('message-input');
+    if (!messageInput) return;
+
+    let typingTimeout = null;
+    const TYPING_TIMEOUT = 2000; // 2 secondes
+    
+    messageInput.addEventListener('input', function() {
+      // Envoyer l'événement de frappe au serveur
+      if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+        window.socket.send(JSON.stringify({
+          type: 'typing',
+          user_id: window.currentUserId || 'anonymous',
+          timestamp: new Date().toISOString()
+        }));
+      }
+      
+      // Réinitialiser le délai d'expiration de la frappe
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(function() {
+        // L'utilisateur a arrêté de taper
+        if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+          window.socket.send(JSON.stringify({
+            type: 'stopped_typing',
+            user_id: window.currentUserId || 'anonymous',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      }, TYPING_TIMEOUT);
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation des gestionnaires d\'événements:', error);
+  }
+}
+
+// Cette partie a été déplacée dans la fonction initializeForum
+
+// Réduire la fréquence du polling maintenant que nous avons les WebSockets
+// Configuration du polling en complément des WebSockets
+if (window.polling) {
+  clearInterval(window.polling);
+  window.polling = setInterval(function() {
+    if (typeof window.checkForNewMessages === 'function') {
+      window.checkForNewMessages();
+    }
+  }, 30000); // Vérification toutes les 30 secondes
+}
+
+// Exposer les fonctions globales
+window.socket = socket; // Rendre la socket disponible globalement
+
+// Fermer la connexion WebSocket lors du déchargement de la page
+window.addEventListener('beforeunload', function() {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.close(1000, 'Page fermée');
+  }
+});
+
+/* ---------- Rendu riche et sanitization ---------- */
+
+/* Proxy GIPHY robuste (évite double-proxy, ignore data:, déroule un proxy imbriqué) */
+const ASSETS_PROXY_URL = "{% url 'forum:assets_proxy' %}";
+  function prox(u){
+    try {
+      if (!u) return '';
+      const s = String(u);
+
+      // Pas de proxy pour data:
+      if (/^data:/i.test(s)) return s;
+
+      // Déroulage si on reçoit déjà une URL de notre proxy local (évite double-proxy)
+      const localPrefix = new URL(ASSETS_PROXY_URL, location.origin).toString() + '?u=';
+      if (s.startsWith(localPrefix)) {
+        const inner = decodeURIComponent(s.slice(localPrefix.length));
+        return prox(inner);
+      }
+
+      // Proxy uniquement les hôtes GIPHY
+      const pu = new URL(s);
+      const allowed = new Set(['media.giphy.com','i.giphy.com','giphy.com','giphy-prod.s3.amazonaws.com',
+        'media0.giphy.com','media1.giphy.com','media2.giphy.com','media3.giphy.com','media4.giphy.com']);
+      if (!allowed.has(pu.hostname)) return s;
+
+      const url = new URL(ASSETS_PROXY_URL, location.origin);
+      url.searchParams.set('u', pu.toString());
+      return url.toString();
+    } catch(e){ return u; }
+  }
+  
+// Convertit le contenu texte en HTML en remplaçant les shortcodes par des <img> sécurisés.
+// Shortcodes supportés: [gif src="URL"], [sticker src="URL"]
+function fhRenderRichContent(text){
+  const t = String(text || '');
+  const escaped = t.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const withMedia = escaped
+    .replace(/\[gif\s+src="([^"]+)"\]/g, (_, u) => `<img src="${prox(u)}" alt="GIF" class="inline-block max-h-40 rounded" loading="lazy" decoding="async" data-kind="gif">`)
+    .replace(/\[sticker\s+src="([^"]+)"\]/g, (_, u) => `<img src="${prox(u)}" alt="Sticker" class="inline-block h-24" loading="lazy" decoding="async" data-kind="sticker">`);
+
+  // à coller ici: prise en compte des retours à la ligne
+  const withBreaks = withMedia.replace(/\r?\n/g, '<br>');
+
+  return window.DOMPurify
+    ? window.DOMPurify.sanitize(withBreaks, { ALLOWED_TAGS: ['img','span','br'], ALLOWED_ATTR: ['src','alt','class','loading','decoding','data-kind'] })
+    : withBreaks;
+}
+
+/* ---------- Palette riche: Emoji + Tenor (GIFs & Stickers) — version modale ---------- */
+(function(){
+  const TENOR_LIMIT = 24;
+
+  const toggleBtn = document.getElementById('fh-richpicker-toggle');
+  const modal = document.getElementById('fh-richpicker-modal');
+  const closeBtn = document.getElementById('fh-richpicker-close');
+  const tabs = Array.from(document.querySelectorAll('.fh-tab-btn'));
+  const searchInput = document.getElementById('fh-richpicker-search');
+
+  // Notifications (doivent être dispo avant l'enregistreur)
+  const fhToastArea = document.getElementById('toast-area');
+  function fhShowToast(text, kind='info', seconds=3){
+    const el = document.createElement('div');
+    el.className = 'px-4 py-2 rounded shadow-sm text-sm border';
+    if (kind === 'info') el.classList.add('bg-white', 'border-gray-200', 'text-gray-800');
+    if (kind === 'success') el.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+    if (kind === 'error') el.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
+    el.textContent = text;
+    fhToastArea.appendChild(el);
+    setTimeout(()=> {
+      el.classList.add('opacity-0');
+      setTimeout(()=> el.remove(), 300);
+    }, seconds * 1000);
+  }
+
+  const gifGrid = document.getElementById('fh-gif-grid');
+  const gifMore = document.getElementById('fh-gif-more');
+  const stickerGrid = document.getElementById('fh-sticker-grid');
+  const stickerMore = document.getElementById('fh-sticker-more');
+  const favGrid = document.getElementById('fh-fav-grid');
+
+  function makeSvgDataUri(kind, label, w, h, bg, fg){
+    const svg = encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>
+        <rect width='100%' height='100%' fill='${bg}'/>
+        <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
+              font-family='Arial, sans-serif' font-size='${Math.floor(Math.min(w,h)/4)}'
+              fill='${fg}'>${label}</text>
+      </svg>`
+    );
+    return `data:image/svg+xml;charset=utf-8,${svg}`;
+  }
+
+  const FALLBACK_GIF_URL = "{% static 'forum/fallback_gif.svg' %}";
+  const FALLBACK_STICKER_URL = "{% static 'forum/fallback_sticker.svg' %}";
+
+  // Rendu d’un message d’info si aucune ressource n’est disponible (en plus des placeholders)
+  function renderEmptyInfo(grid, kind){
+    const info = document.createElement('div');
+    info.className = 'col-span-full text-xs text-gray-500';
+    info.textContent = `Aucune ressource ${kind.toUpperCase()} reçue du serveur. Affichage d’exemples.`;
+    grid.appendChild(info);
+  }
+
+  const messageInput = document.getElementById('message-input');
+  const attachmentsInput = document.getElementById('attachments');
+
+  let currentTab = 'emoji';
+  let q = '';
+  let gifPos = '';
+  let stickerPos = '';
+
+  // Favoris simple (localStorage)
+  const FAV_KEY = 'fh-favs-v1';
+  function loadFavs(){ try { return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); } catch(_){ return []; } }
+  function saveFavs(list){ localStorage.setItem(FAV_KEY, JSON.stringify(list||[])); }
+  function toggleFav(item){
+    const favs = loadFavs();
+    const idx = favs.findIndex(f => f.url === item.url && f.kind === item.kind);
+    if (idx >= 0) favs.splice(idx,1); else favs.push(item);
+    saveFavs(favs);
+    if (currentTab === 'fav') renderFavs();
+  }
+
+  function renderFavs(){
+    favGrid.innerHTML = '';
+    const favs = loadFavs();
+    favs.forEach(it => {
+      const el = document.createElement('div');
+      el.className = 'relative';
+      const img = document.createElement('img');
+      img.src = it.url; img.alt = it.kind; img.className = it.kind==='sticker' ? 'h-24' : 'max-h-40 rounded';
+      el.appendChild(img);
+      const bar = document.createElement('div');
+      bar.className = 'absolute top-1 right-1 flex gap-1';
+      const ins = document.createElement('button'); ins.className='px-1.5 py-0.5 rounded bg-emerald-600 text-white text-xs'; ins.textContent='Insérer';
+      ins.onclick = () => insertShortcode(it.kind, it.url);
+      const star = document.createElement('button'); star.className='px-1.5 py-0.5 rounded bg-white text-xs'; star.textContent='★'; star.onclick=()=>toggleFav(it);
+      bar.appendChild(ins); bar.appendChild(star); el.appendChild(bar);
+      favGrid.appendChild(el);
+    });
+  }
+
+  function insertAtCursor(txtArea, text){
+    const start = txtArea.selectionStart ?? txtArea.value.length;
+    const end = txtArea.selectionEnd ?? txtArea.value.length;
+    const before = txtArea.value.slice(0, start);
+    const after = txtArea.value.slice(end);
+    txtArea.value = before + text + after;
+    const pos = start + text.length;
+    txtArea.setSelectionRange(pos, pos);
+    txtArea.focus();
+  }
+
+  // Affichage de notifications (utilise #toast-area existant)
+  const toastArea = document.getElementById('toast-area');
+  function showToast(text, kind='info', seconds=3){
+    const el = document.createElement('div');
+    el.className = 'px-4 py-2 rounded shadow-sm text-sm border';
+    if (kind === 'info') el.classList.add('bg-white', 'border-gray-200', 'text-gray-800');
+    if (kind === 'success') el.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+    if (kind === 'error') el.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
+    el.textContent = text;
+    toastArea.appendChild(el);
+    setTimeout(()=> {
+      el.classList.add('opacity-0');
+      setTimeout(()=> el.remove(), 300);
+    }, seconds * 1000);
+  }
+
+  // Insertion + règle “Sticker seul”
+  function insertShortcode(kind, url){
+    if (kind === 'sticker'){ selectSticker(url); closePicker(); return; }
+    if (kind === 'gif'){ selectGif(url); closePicker(); return; }
+    // Emoji = inline via l’event du web component, pas ici
+    closePicker();
+  }
+
+  // Onglets
+  function tabTo(kind) {
+    currentTab = kind;
+    if (tabs && tabs.length > 0) {
+      tabs.forEach(b => {
+        if (b && b.dataset) {
+          b.classList.toggle('bg-gray-900', b.dataset.tab===kind);
+          b.classList.toggle('text-white', b.dataset.tab===kind);
+          b.classList.toggle('bg-gray-100', b.dataset.tab!==kind);
+        }
+      });
+    }
+    
+    const emojiTab = document.getElementById('fh-tab-emoji');
+    const gifTab = document.getElementById('fh-tab-gif');
+    const stickerTab = document.getElementById('fh-tab-sticker');
+    const favTab = document.getElementById('fh-tab-fav');
+    
+    if (emojiTab) emojiTab.classList.toggle('hidden', kind!=='emoji');
+    if (gifTab) gifTab.classList.toggle('hidden', kind!=='gif');
+    if (stickerTab) stickerTab.classList.toggle('hidden', kind!=='sticker');
+    if (favTab) favTab.classList.toggle('hidden', kind!=='fav');
+    
+    if (kind==='gif' && gifGrid && !gifGrid.dataset.loaded) { 
+      gifGrid.dataset.loaded='1'; 
+      loadGifs(); 
+    }
+    if (kind==='sticker' && stickerGrid && !stickerGrid.dataset.loaded) { 
+      stickerGrid.dataset.loaded='1'; 
+      loadStickers(); 
+    }
+    if (kind==='fav') { 
+      renderFavs(); 
+    }
+  }
+  
+  if (tabs && tabs.length > 0) {
+    tabs.forEach(b => {
+      if (b) {
+        b.addEventListener('click', () => tabTo(b.dataset.tab));
+      }
+    });
+  }
+
+  // Emoji (web component)
+  const emojiPicker = document.getElementById('fh-emoji-picker');
+  if (emojiPicker) {
+    emojiPicker.addEventListener('emoji-click', (ev) => {
+      const emoji = (ev && ev.detail && ev.detail.unicode) || '';
+      if (emoji && messageInput) insertAtCursor(messageInput, emoji);
+    });
+  }
+
+  const ASSETS_FEED_URL = "{% url 'forum:assets_feed' %}";
+  const ASSETS_SEARCH_URL = "{% url 'forum:assets_search' %}";
+
+  async function assetsFetch(url, params){
+    const u = new URL(url, location.origin);
+    Object.keys(params||{}).forEach(k => { if (params[k] !== undefined && params[k] !== null && params[k] !== '') u.searchParams.set(k, params[k]); });
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 8000);
+    try {
+      const res = await fetch(u.toString(), { credentials: 'same-origin', headers: {'Accept':'application/json'}, signal: ctrl.signal });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      return await res.json();
+    } finally { clearTimeout(t); }
+  }
+
+  function renderItems(grid, list, kind){
+    list.forEach(it => {
+      // Préfère une vignette légère fournie par le backend, sinon retombe sur l'URL pleine
+      const fullRaw = (it && it.url) || (it && it.media && it.media[0] && it.media[0].gif && it.media[0].gif.url) || '';
+      const thumbRaw = (it && it.thumb) || fullRaw;
+      if (!thumbRaw) return;
+      const thumbUrl = prox(thumbRaw);
+      const fullUrl = fullRaw ? prox(fullRaw) : '';
+
+      const box = document.createElement('div'); box.className='relative group';
+      const img = document.createElement('img');
+      img.src = thumbUrl;
+      if (fullUrl) img.dataset.full = fullUrl;
+      img.alt = kind;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.width = kind==='sticker' ? 160 : 300; // indices de dimensions pour éviter les reflows
+      img.height = kind==='sticker' ? 160 : 200;
+      img.className = kind==='sticker' ? 'h-24 object-contain' : 'h-32 w-full object-cover rounded';
+
+      // Retry unique cache-bust en cas d'erreur
+      let retried = false;
+      img.onerror = () => {
+        if (retried) return;
+        retried = true;
+        const bust = thumbUrl + (thumbUrl.includes('?') ? '&' : '?') + 'r=' + String(Date.now());
+        img.src = bust;
+      };
+
+      box.appendChild(img);
+
+      const bar = document.createElement('div'); bar.className='absolute top-1 right-1 hidden group-hover:flex gap-1';
+      const ins = document.createElement('button'); ins.className='px-1.5 py-0.5 rounded bg-emerald-600 text-white text-xs'; ins.textContent='Insérer';
+      ins.onclick = () => insertShortcode(kind, fullRaw || thumbRaw);
+      const star = document.createElement('button'); star.className='px-1.5 py-0.5 rounded bg-white text-xs'; star.textContent='☆';
+      star.onclick = () => toggleFav({kind, url: (fullRaw || thumbRaw)});
+      bar.appendChild(ins); bar.appendChild(star); box.appendChild(bar);
+
+      grid.appendChild(box);
+    });
+  }
+
+  async function loadGifs(){
+    try {
+      gifMore.disabled = true;
+      const data = await assetsFetch(ASSETS_FEED_URL, { kind: 'gif', q: q || 'trending', pos: gifPos, limit: TENOR_LIMIT });
+      if (!data || data.ok !== true) throw new Error('Réponse invalide');
+      const items = data.items || [];
+      if (items.length > 0){
+        renderItems(gifGrid, items, 'gif');
+        gifPos = data.next || '';
+      } else {
+        // Rien -> rien (aucune alternative)
+        gifPos = '';
+      }
+    } catch(e){
+      console.warn(e);
+    } finally {
+      gifMore.disabled = false;
+    }
+  }
+
+  async function loadStickers(){
+    try {
+      stickerMore.disabled = true;
+      const data = await assetsFetch(ASSETS_FEED_URL, { kind: 'sticker', q: q || 'stickers', pos: stickerPos, limit: TENOR_LIMIT });
+      if (!data || data.ok !== true) throw new Error('Réponse invalide');
+      const items = data.items || [];
+      if (items.length > 0){
+        renderItems(stickerGrid, items, 'sticker');
+        stickerPos = data.next || '';
+      } else {
+        // Rien -> rien (aucune alternative)
+        stickerPos = '';
+      }
+    } catch(e){
+      console.warn(e);
+    } finally {
+      stickerMore.disabled = false;
+    }
+  }
+
+  gifMore.addEventListener('click', loadGifs);
+  stickerMore.addEventListener('click', loadStickers);
+
+  /* ---------- État de sélection et rendu des aperçus ---------- */
+  const composePreview = document.getElementById('rich-preview');
+  const modalPreview = document.getElementById('fh-modal-preview');
+
+  // État: un GIF sélectionné OU un Sticker sélectionné (WhatsApp-like)
+  let selectedGifUrl = '';
+  let selectedStickerUrl = '';
+  // Synchroniser l'état avec le scope global pour que l'autre IIFE (submit) puisse le lire
+  window.fhSelectedGifUrl = window.fhSelectedGifUrl || '';
+  window.fhSelectedStickerUrl = window.fhSelectedStickerUrl || '';
+
+  // Rendu d’un chip d’aperçu pour la zone d’envoi
+  function renderComposePreview(){
+    if (!composePreview) return;
+    composePreview.innerHTML = '';
+    if (selectedGifUrl){
+      const img = document.createElement('img');
+      img.src = selectedGifUrl; img.alt = 'GIF';
+      img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+      img.className = 'h-20 rounded';
+      img.onerror = () => { img.onerror=null; img.src = FALLBACK_GIF_URL; };
+      composePreview.appendChild(img);
+    }
+    if (selectedStickerUrl){
+      const img = document.createElement('img');
+      img.src = selectedStickerUrl; img.alt = 'Sticker';
+      img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+      img.className = 'h-20';
+      img.onerror = () => { img.onerror=null; img.src = FALLBACK_STICKER_URL; };
+      composePreview.appendChild(img);
+    }
+  }
+
+  // Rendu d’un aperçu en pied de modale
+  function renderModalPreview(){
+    if (!modalPreview) return;
+    modalPreview.innerHTML = '';
+    if (!selectedGifUrl && !selectedStickerUrl){
+      const txt = document.createElement('div');
+      txt.className = 'text-[12px] text-gray-500';
+      txt.textContent = 'Aucun élément sélectionné.';
+      modalPreview.appendChild(txt);
+      return;
+    }
+    if (selectedGifUrl){
+      const img = document.createElement('img');
+      img.src = selectedGifUrl; img.alt = 'GIF';
+      img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+      img.className = 'h-16 rounded';
+      img.onerror = () => { img.onerror=null; img.src = FALLBACK_GIF_URL; };
+      modalPreview.appendChild(img);
+    }
+    if (selectedStickerUrl){
+      const img = document.createElement('img');
+      img.src = selectedStickerUrl; img.alt = 'Sticker';
+      img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+      img.className = 'h-16';
+      img.onerror = () => { img.onerror=null; img.src = FALLBACK_STICKER_URL; };
+      modalPreview.appendChild(img);
+    }
+  }
+
+  // Séléctions
+  function selectGif(url){
+    // Un GIF peut accompagner du texte
+    selectedStickerUrl = '';
+    selectedGifUrl = url || '';
+    // Miroir global
+    window.fhSelectedStickerUrl = '';
+    window.fhSelectedGifUrl = selectedGifUrl;
+    renderComposePreview();
+    renderModalPreview();
+    showToast('GIF sélectionné. Vous pouvez ajouter du texte puis Envoyer.', 'info', 3);
+  }
+
+  function selectSticker(url){
+    // Un Sticker peut maintenant accompagner du texte (ne pas vider texte/PJ)
+    selectedStickerUrl = url || '';
+    selectedGifUrl = selectedGifUrl || ''; // inchangé
+    // Miroir global
+    window.fhSelectedStickerUrl = selectedStickerUrl;
+    window.fhSelectedGifUrl = selectedGifUrl;
+    renderComposePreview();
+    renderModalPreview();
+    showToast('Sticker sélectionné. Vous pouvez ajouter du texte puis Envoyer.', 'info', 3);
+  }
+
+  // Adapter l’insertion: emoji = inline; GIF/Sticker = sélection visuelle (pas de shortcode dans le textarea)
+  function insertShortcode(kind, url){
+    if (kind === 'sticker'){ selectSticker(url); return; }
+    if (kind === 'gif'){ selectGif(url); return; }
+    // Emoji = comportement inline inchangé
+    try {
+      const posBefore = messageInput.selectionStart ?? messageInput.value.length;
+      const emojiStr = ''; // l’emoji arrive via l’event du web component, pas ici
+      if (emojiStr) insertAtCursor(messageInput, emojiStr);
+    } catch(e){}
+  }
+
+  // Surcharger le clic sur “Insérer” dans les grilles
+  // (remplace l’ancien comportement de renderItems qui appelait insertShortcode)
+  function bindGridInsertHandlers(){
+    // GIFs
+    document.querySelectorAll('#fh-gif-grid img').forEach(img => {
+      img.onclick = () => selectGif(img.dataset.full || img.src);
+    });
+    // Stickers
+    document.querySelectorAll('#fh-sticker-grid img').forEach(img => {
+      img.onclick = () => selectSticker(img.dataset.full || img.src);
+    });
+  }
+
+  // Après chaque chargement, lier les handlers
+  const _oldRenderItems = renderItems;
+  renderItems = function(grid, list, kind){
+    _oldRenderItems(grid, list, kind);
+    bindGridInsertHandlers();
+  };
+
+  // Au changement d’onglet, rafraîchir l’aperçu modale
+  tabs.forEach(b => b.addEventListener('click', renderModalPreview));
+
+  // À l’ouverture/fermeture de la modale, garder l’aperçu synchro
+  function openPicker(){
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    toggleBtn.setAttribute('aria-expanded','true');
+    renderModalPreview();
+  }
+  
+  function closePicker(){
+    modal.classList.add('hidden'); 
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    toggleBtn.setAttribute('aria-expanded','false');
+  }
+
+  // Au chargement initial
+  renderComposePreview();
+  renderModalPreview();
+
+  // Fermeture au clic en dehors
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closePicker();
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closePicker();
+    }
+  });
+
+  let searchDebounce = null;
+  searchInput.addEventListener('input', ()=>{
+    q = searchInput.value.trim();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(()=>{
+      gifGrid.innerHTML=''; 
+      gifGrid.dataset.loaded='';
+      stickerGrid.innerHTML=''; 
+      stickerGrid.dataset.loaded='';
+      gifPos=''; 
+      stickerPos='';
+      if (currentTab==='gif') loadGifs();
+      if (currentTab==='sticker') loadStickers();
+    }, 300);
+  });
+
+  // Vérification de sécurité pour tous les éléments du sélecteur d'émojis
+  if (toggleBtn && modal && closeBtn) {
+    toggleBtn.addEventListener('click', () => modal.classList.contains('hidden') ? openPicker() : closePicker());
+    closeBtn.addEventListener('click', closePicker);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closePicker(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePicker(); });
+  } else {
+    console.warn('Certains éléments requis pour le sélecteur d\'émojis sont manquants');
+  }
+
+  // Au chargement initial
+  renderComposePreview();
+  renderModalPreview();
+
+  // Exposer une petite API globale pour synchroniser les aperçus depuis l'autre IIFE
+  window.fhRenderComposePreview = renderComposePreview;
+  window.fhRenderModalPreview = renderModalPreview;
+
+    // (Optionnel) exposer les sélections si besoin futur
+  window.fhSelectGif = selectGif;
+  window.fhSelectSticker = selectSticker;
+  
+  // Fermeture de l'IIFE principale
+  return {
+    selectGif: selectGif,
+    selectSticker: selectSticker
+  };
+})();
+
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Commande #{{ order.id }} — Examhub{% endblock %}
+{% block content %}
+  <a href="/" class="text-sm text-blue-600">← Accueil</a>
+  <h1 class="text-2xl font-bold mt-2 mb-4">Commande #{{ order.id }}</h1>
+
+  <div class="bg-white rounded-2xl shadow p-5 mb-6">
+    <div class="text-sm text-gray-500">Statut :
+      <span class="font-semibold">{{ order.status }}</span>
+    </div>
+    <div class="text-sm text-gray-500">Montant total : <span class="font-semibold">{{ order.total_amount }} F</span></div>
+  </div>
+
+  {% if order.status != 'PAID' %}
+    <form method="post" class="bg-white rounded-2xl shadow p-5">
+      {% csrf_token %}
+      <p class="mb-4">Simulateur : cliquer sur « Confirmer le paiement » pour marquer la transaction comme réussie.</p>
+      <button class="px-4 py-2 rounded-xl bg-green-600 text-white">Confirmer le paiement</button>
+    </form>
+  {% else %}
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h2 class="text-lg font-semibold mb-3">Téléchargements</h2>
+      <ul class="list-disc pl-5 space-y-2">
+        {% for t in tokens %}
+          <li>
+            {{ t.item.pack }} — expire le {{ t.expires_at|date:'d/m/Y H:i' }} — restants : {{ t.remaining_downloads }}
+            <a class="ml-2 underline text-blue-600" href="{% url 'exams:download_file' t.token %}">Télécharger</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endblock %}

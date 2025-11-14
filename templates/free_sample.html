@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Extraits Épreuves + Corrigés — Examhub{% endblock %}
+
+{% block content %}
+  <a href="{% url 'exams:index' %}" class="text-sm text-blue-600">← Retourner à l’accueil</a>
+
+  <h1 class="text-2xl font-bold mt-2 mb-4">Extraits libres d’accès d’une épreuve et de son corrigé</h1>
+
+  <p class="text-gray-700 mb-6">
+    Téléchargez gratuitement le dossier compressé ci-dessous pour avoir une idée de comment se présentent
+    les épreuves et leurs corrigés qui se trouvent à l’intérieur des dossiers compressés que vous allez
+    téléchargé après avoir effectué l’achat. Il s’agit donc d’un modèle de prévisualisation.
+  </p>
+
+  {% if sample and sample.file %}
+    <div class="bg-white rounded-2xl shadow p-5 flex items-center justify-between">
+      <div>
+        <div class="font-semibold">Dossier compressé de prévisualisation</div>
+        <div class="text-xs text-gray-500 mt-1">{{ sample.title }}</div>
+      </div>
+      <a href="{% url 'exams:free_sample_download' sample.pk %}"
+         class="inline-flex items-center rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
+         Télécharger
+      </a>
+    </div>
+  {% else %}
+    <div class="text-gray-500">Aucun extrait n’est disponible pour le moment.</div>
+  {% endif %}
+{% endblock %}

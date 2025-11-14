@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+  <h1>Importer un fichier ZIP</h1>
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <!-- on réexpédie l’action + la sélection à l’admin -->
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="hidden" name="apply" value="1">
+    {% for p in packs %}
+      <input type="hidden" name="_selected_action" value="{{ p.pk }}">
+    {% endfor %}
+
+    <fieldset class="module aligned">
+      <div class="form-row">
+        {{ form.zip_file.label_tag }}
+        {{ form.zip_file }}
+        {% if form.zip_file.help_text %}<p class="help">{{ form.zip_file.help_text }}</p>{% endif %}
+        {% for e in form.zip_file.errors %}<p class="errornote">{{ e }}</p>{% endfor %}
+      </div>
+    </fieldset>
+
+    <div class="submit-row">
+      <input type="submit" class="default" value="Importer">
+      <a class="button cancel-link" href="{% url 'admin:exams_pack_changelist' %}">Annuler</a>
+    </div>
+  </form>
+{% endblock %}

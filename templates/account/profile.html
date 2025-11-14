@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Mon profile — Examhub{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Mon profile</h1>
+
+<form method="post" enctype="multipart/form-data" class="grid gap-6 md:grid-cols-2 bg-white p-6 rounded-2xl shadow">
+  {% csrf_token %}
+
+  <div>
+    <h2 class="font-semibold mb-2">Informations du compte</h2>
+    <div class="space-y-3">
+      {{ user_form.username.label_tag }} {{ user_form.username }}
+      {{ user_form.email.label_tag }} {{ user_form.email }}
+    </div>
+  </div>
+
+  <div>
+    <h2 class="font-semibold mb-2">Informations de profil</h2>
+    <div class="space-y-3">
+      {{ profile_form.phone.label_tag }} {{ profile_form.phone }}
+      {{ profile_form.avatar.label_tag }} {{ profile_form.avatar }}
+      {% if request.user.profile.avatar %}
+        <img src="{{ request.user.profile.avatar.url }}" alt="avatar" class="mt-2 w-24 h-24 rounded-full object-cover">
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="md:col-span-2 flex items-center gap-3">
+    <button class="px-4 py-2 rounded bg-indigo-600 text-white">Enregistrer</button>
+
+    <form action="{% url 'exams:delete_account' %}" method="post" onsubmit="return confirm('Supprimer votre compte ? Cette action est irréversible.');">
+      {% csrf_token %}
+      <button class="px-4 py-2 rounded bg-red-600 text-white" type="submit">Supprimer le compte</button>
+    </form>
+  </div>
+</form>
+{% endblock %}

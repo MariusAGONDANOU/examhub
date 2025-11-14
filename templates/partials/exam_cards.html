@@ -1,0 +1,12 @@
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for e in exams %}
+    <a href="{% url 'exams:exam_detail' e.slug %}" class="block bg-white rounded-2xl shadow hover:shadow-md p-5">
+      <div class="font-semibold">{{ e.name }}</div>
+      <div class="text-sm text-gray-500">
+        {{ e.level }} — {% if e.is_long_model %}Modèle long{% else %}Modèle court{% endif %}
+      </div>
+    </a>
+  {% empty %}
+    <p>Aucun examen disponible pour le moment.</p>
+  {% endfor %}
+</div>

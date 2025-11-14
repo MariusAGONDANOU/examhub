@@ -1,0 +1,13 @@
+<svg width="200" height="150" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fond gris clair -->
+  <rect width="200" height="150" fill="#f0f0f0"/>
+  
+  <!-- Icône de vidéo -->
+  <circle cx="100" cy="75" r="40" fill="#e0e0e0"/>
+  <polygon points="85,90 130,75 85,60" fill="#808080"/>
+  
+  <!-- Texte -->
+  <text x="100" y="130" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#808080">
+    Miniature non disponible
+  </text>
+</svg>

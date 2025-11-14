@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% block title %}Mon panier — Examhub{% endblock %}
+{% block content %}
+  <div class="flex items-center justify-between mb-4">
+    <a href="{% url 'exams:index' %}" class="text-sm text-blue-600">← Retourner à l’accueil</a>
+    <button id="openAddModal"
+            class="inline-flex items-center rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
+      Ajouter au panier
+    </button>
+  </div>
+
+  <h1 class="text-2xl font-bold mb-4">Mon panier</h1>
+
+  {% if not items %}
+    <div class="bg-white rounded-2xl shadow p-5">
+      <p>Votre panier est vide.</p>
+    </div>
+  {% else %}
+    <div class="bg-white rounded-2xl shadow p-5">
+      <ul class="divide-y">
+        {% for it in items %}
+          <li class="py-3 flex items-center justify-between">
+            <div>
+              <div class="font-semibold">
+                {% if it.pack.pack_type == 'DOUBLE' %}
+                  Épreuves Mathématiques et PCT + corrigés {{ it.pack.years_range }}
+                {% else %}
+                  Épreuves {{ it.pack.subject.name }} + corrigés {{ it.pack.years_range }}
+                {% endif %}
+              </div>
+              <div class="text-sm text-gray-500">{{ it.pack.exam.name }} — {{ it.pack.get_pack_type_display }}</div>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="font-semibold">{{ it.unit_price }} F</div>
+              <form method="post" action="{% url 'exams:remove_from_cart' it.id %}">
+                {% csrf_token %}
+                <button class="text-red-600 hover:underline">Supprimer</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="mt-6 bg-white rounded-2xl shadow p-5">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="text-lg">
+          Total : <span class="font-bold">{{ total }} F</span>
+        </div>
+
+        <!-- Bouton par défaut : Mobile Money (CinetPay) -->
+        <form method="post" action="{% url 'exams:cart_checkout' %}" class="w-full sm:w-auto">
+          {% csrf_token %}
+          <!-- Ne PAS envoyer payment_method => CinetPay par défaut côté serveur -->
+          <button class="w-full sm:w-auto rounded-xl px-5 py-2 bg-green-600 text-white hover:bg-green-700">
+            Payer par Mobile Money (CinetPay)
+          </button>
+        </form>
+
+        <!-- Texte + bouton pour carte bancaire (Stripe) -->
+        <div class="text-right">
+          <p class="text-sm text-gray-700">Souhaitez-vous effectuer le paiement à l’aide de votre carte bancaire ?</p>
+          <p class="text-sm text-gray-700 mb-2">Si oui, alors cliquez ci-dessous :</p>
+
+          <form method="post" action="{% url 'exams:cart_checkout' %}" class="inline-block">
+            {% csrf_token %}
+            <input type="hidden" name="payment_method" value="STRIPE">
+            <button class="rounded-xl px-5 py-2 bg-blue-600 text-white hover:bg-blue-700">
+              Payer avec ma carte bancaire
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  <div class="mt-6 text-right">
+    <a href="{% url 'exams:payment_simulator' %}" class="inline-block rounded-xl px-4 py-2 bg-gray-800 text-white">
+      Tester sans payer (simulateur)
+    </a>
+  </div>
+
+  <!-- Modale : Ajout multiple au panier -->
+  <div id="addPacksModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative max-w-3xl mx-auto mt-16 bg-white rounded-2xl shadow p-6">
+      <div class="flex items-start justify-between mb-4">
+        <h3 class="text-lg font-semibold">Ajouter des packs au panier</h3>
+        <button id="closeAddModal" class="rounded-xl px-3 py-1 bg-gray-200 hover:bg-gray-300">Fermer</button>
+      </div>
+
+      <form id="addPacksForm">
+        {% csrf_token %}
+        <div class="max-h-80 overflow-y-auto border rounded-xl">
+          <ul class="divide-y">
+            {% for p in all_packs %}
+              <li class="px-4 py-3 flex items-start gap-3">
+                <input type="checkbox" name="pack_ids" value="{{ p.id }}" class="mt-1 pack-checkbox"
+                  {% if p.id in in_cart_ids %} data-in-cart="1"{% endif %}>
+                <div>
+                  <div class="font-medium">
+                    {% if p.pack_type == 'DOUBLE' %}
+                      Épreuves Mathématiques et PCT + corrigés {{ p.years_range }}
+                    {% else %}
+                      Épreuves {{ p.subject.name }} + corrigés {{ p.years_range }}
+                    {% endif %}
+                  </div>
+                  <div class="text-sm text-gray-500">{{ p.exam.name }} — {{ p.get_pack_type_display }} — {{ p.price }} F</div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between">
+          <div class="text-sm text-gray-600">
+            <span id="selectedCount">0</span> pack(s) sélectionné(s)
+          </div>
+          <button type="submit" id="submitAddPacks"
+                  class="inline-flex items-center rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled>
+            Ajouter les <span id="selectedCountBtn" class="mx-1">0</span> pack(s) sélectionné(s) au panier
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Modale d’avertissement : pack déjà dans le panier -->
+  <div id="alreadyInCartModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative max-w-md mx-auto mt-24 bg-white rounded-2xl shadow p-6">
+      <h3 class="text-lg font-semibold mb-2">Pack déjà dans le panier</h3>
+      <p id="alreadyInCartMsg" class="text-sm text-gray-700 mb-4"></p>
+      <div class="flex justify-end">
+        <button id="closeAlreadyInCart" class="rounded-xl px-4 py-2 bg-gray-200 hover:bg-gray-300">Fermer</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  // Ouvrir / fermer la modale
+  const addModal = document.getElementById('addPacksModal');
+  document.getElementById('openAddModal').addEventListener('click', () => addModal.classList.remove('hidden'));
+  document.getElementById('closeAddModal').addEventListener('click', () => addModal.classList.add('hidden'));
+  addModal.addEventListener('click', (e) => { if (e.target === addModal) addModal.classList.add('hidden'); });
+
+  // Compteur en temps réel
+  const checkboxes = Array.from(document.querySelectorAll('.pack-checkbox'));
+  const countEl = document.getElementById('selectedCount');
+  const countBtnEl = document.getElementById('selectedCountBtn');
+  function updateCount() {
+    const n = checkboxes.filter(cb => cb.checked).length;
+    countEl.textContent = n;
+    countBtnEl.textContent = n;
+    document.getElementById('submitAddPacks').disabled = n === 0;
+  }
+  checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+
+  // Modale d’avertissement si pack déjà présent
+  function showAlreadyInCartModal(packName) {
+    const msg = `Le pack « ${packName} » figure déjà dans votre panier. ` +
+      "Il vous est donc impossible de l’ajouter de nouveau car un même pack ne peut être ajouté deux ou plusieurs fois au panier. " +
+      "Veuillez donc cocher d’autres packs de la liste que vous n’avez pas encore ajouté à votre panier.";
+    document.getElementById('alreadyInCartMsg').textContent = msg;
+    document.getElementById('alreadyInCartModal').classList.remove('hidden');
+  }
+  document.getElementById('closeAlreadyInCart').addEventListener('click', () => {
+    document.getElementById('alreadyInCartModal').classList.add('hidden');
+  });
+
+  // Intercepter les cases déjà en panier
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', function() {
+      if (cb.checked && cb.dataset.inCart === "1") {
+        // récupérer le nom du pack affiché
+        const label = cb.closest('li').querySelector('.font-medium').textContent.trim();
+        cb.checked = false; // le décocher
+        showAlreadyInCartModal(label);
+      }
+      updateCount();
+    });
+  });
+
+  // Soumission AJAX
+  const form = document.getElementById('addPacksForm');
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fd = new FormData(form);
+    // renvoie pack_ids[] côté serveur
+    const ids = [];
+    for (const cb of document.querySelectorAll('.pack-checkbox:checked')) {
+      ids.push(cb.value);
+    }
+    fd.delete('pack_ids');
+    ids.forEach(v => fd.append('pack_ids[]', v));
+
+    const resp = await fetch("{% url 'exams:add_multiple_to_cart' %}", {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken') }
+    });
+    if (!resp.ok) return alert("Une erreur est survenue. Veuillez réessayer.");
+    const data = await resp.json();
+    const badge = document.getElementById('cart-badge');
+    if (badge) { badge.textContent = data.cart_count; if (parseInt(data.cart_count) > 0) badge.classList.remove('hidden'); }
+    // Recharger la page pour afficher les nouveaux éléments
+    window.location.reload();
+  });
+</script>
+{% endblock %}

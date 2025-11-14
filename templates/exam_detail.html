@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam.name }} — Examhub{% endblock %}
+{% block content %}
+  <a href="{% url 'exams:index' %}" class="text-sm text-blue-600">← Retourner à l’accueil</a>
+  <h1 class="text-2xl font-bold mt-2 mb-4">{{ exam.name }}</h1>
+  <p class="text-gray-600 mb-6">
+    Sélectionnez un pack d'épreuves {{ exam.name }}{% if packs %} {{ packs.0.years_range }}{% endif %}.
+  </p>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    {% for p in packs %}
+      <div class="bg-white rounded-2xl shadow p-5 flex flex-col justify-between">
+        <div>
+          <div class="text-lg font-semibold">
+            {% if p.pack_type == 'DOUBLE' %}
+              Épreuves Mathématiques et PCT + corrigés {{ p.years_range }}
+            {% else %}
+              Épreuves {{ p.subject.name }} + corrigés {{ p.years_range }}
+            {% endif %}
+          </div>
+          <div class="text-sm text-gray-500 mt-1">{{ p.exam.name }} — {{ p.get_pack_type_display }} — {{ p.price }} F</div>
+        </div>
+
+        <form class="mt-4 add-to-cart-form" method="post" action="{% url 'exams:add_to_cart' %}">
+          {% csrf_token %}
+          <input type="hidden" name="pack_id" value="{{ p.id }}">
+          <button
+            type="submit"
+            class="w-full inline-flex items-center justify-center rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
+            Ajouter au panier
+          </button>
+        </form>
+      </div>
+    {% empty %}
+      <div class="bg-white rounded-2xl shadow p-5">Aucun pack disponible pour cet examen.</div>
+    {% endfor %}
+  </div>
+
+  <!-- Modale de confirmation -->
+  <div id="cartModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative max-w-md mx-auto mt-24 bg-white rounded-2xl shadow p-6">
+      <h3 class="text-lg font-semibold mb-2">Ajout au panier</h3>
+      <p id="cartModalMsg" class="text-sm text-gray-700 mb-4"></p>
+      <div class="flex gap-2 justify-end">
+        <a href="{% url 'exams:cart_detail' %}" class="rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
+          Accéder au contenu du panier
+        </a>
+        <button id="closeCartModal" class="rounded-xl px-4 py-2 bg-gray-200 hover:bg-gray-300">Fermer</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openModal(message) {
+    document.getElementById('cartModalMsg').textContent = message;
+    document.getElementById('cartModal').classList.remove('hidden');
+  }
+  document.getElementById('closeCartModal').addEventListener('click', function () {
+    document.getElementById('cartModal').classList.add('hidden');
+  });
+
+  document.querySelectorAll('.add-to-cart-form').forEach(function (form) {
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!resp.ok) {
+        openModal("Une erreur est survenue. Veuillez réessayer.");
+        return;
+      }
+      const data = await resp.json();
+      let msg;
+      if (data.already_in_cart) {
+        msg = data.message || `Le pack « ${data.pack_name} » figure déjà dans votre panier. Il vous est donc impossible de l’ajouter de nouveau car un même pack ne peut être ajouté deux ou plusieurs fois au panier.`;
+      } else {
+        msg = `Le pack « ${data.pack_name} » a été ajouté avec succès à votre panier. Veuillez accéder à son contenu pour vérification et validation.`;
+      }
+      const badge = document.getElementById('cart-badge');
+      if (badge) { badge.textContent = data.cart_count; if (parseInt(data.cart_count) > 0) { badge.classList.remove('hidden'); } }
+      openModal(msg);
+    });
+  });
+</script>
+{% endblock %}

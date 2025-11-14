@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Échec du paiement</h1>
+  <p>{{ error_message }}</p>
+  <a href="{% url 'exams:cart_detail' %}">Retour au panier</a>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Accueil — Examhub{% endblock %}
+{% block content %}
+  <h1 class="text-3xl font-bold mb-4">Obtenez à un prix très abordable les épreuves accompagnées de leurs corrigés des examens nationaux des dix (10) années précédentes</h1>
+  <p class="mb-6">
+    Ce site est conçu dans l’optique de permettre à toute personne, notamment aux candidats aux divers examens nationaux, de facilement obtenir et à moindre coût les épreuves d’examens des dix (10) années précédentes ainsi que leurs corrigés types complets et détaillés proposés par de révérends professeurs, correcteurs aux divers examens nationaux.
+    Ce site est en définitive conçu pour faciliter les révisions aux candidats aux divers examens nationaux tout en faisant disparaître leur stresse souvent dû à la recherche d’anciennes épreuves d’examens ainsi que leurs corrigés à l’ approche des examens.
+  </p>
+
+  <div class="grid gap-4 mb-6">
+    <div class="bg-white rounded-2xl shadow p-4">
+      Obtenir épreuves + corrigés détaillés et complets des examens nationaux des 10 années précédentes
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+      Possibilité de poser des questions et d’obtenir des réponses de la part de l’enseignant ayant proposé le corrigé si une partie du corrigé n’a pas été comprise
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+      Possibilité de discuter de toutes ses préoccupations avec les autres candidats dans un forum réservé exclusivement aux candidats
+    </div>
+  </div>
+
+  <a href="{% url 'core:visit_now' %}" class="inline-block bg-indigo-600 text-white rounded-2xl px-6 py-3 font-semibold shadow hover:shadow-md">Visiter maintenant</a>
+{% endblock %}

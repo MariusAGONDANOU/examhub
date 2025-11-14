@@ -1,0 +1,12 @@
+Django>=4.2,<5
+pillow
+python-dotenv
+whitenoise
+stripe==7.0.0
+openai>=1.0.0
+bleach>=6.1.0
+pymupdf>=1.22.0
+channels>=4.0.0
+channels-redis==4.1.0
+redis
+daphne>=4.0.0
